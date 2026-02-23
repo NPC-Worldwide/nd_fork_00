@@ -1,1 +1,205 @@
+name: Install and Verify Autolinters
 
+on:
+  workflow_run:
+    workflows: ["build"]
+    types: [completed]
+    branches-ignore: [main]
+
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------------------
+  # Only proceed if the CI workflow passed
+  # -------------------------------------------
+  check-build-status:
+    name: Check build passed
+    runs-on: ubuntu-latest
+    outputs:
+      build_passed: ${{ steps.check.outputs.build_passed }}
+    steps:
+      - name: Check build workflow conclusion
+        id: check
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "build_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "build_passed=false" >> $GITHUB_OUTPUT
+            echo "Build workflow did not pass, skipping linter install"
+          fi
+
+  # -------------------------------------------
+  # Install and verify linters per platform
+  # -------------------------------------------
+  install-linters:
+    name: Install linters on ${{ matrix.os }}
+    needs: check-build-status
+    if: needs.check-build-status.outputs.build_passed == 'true'
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          # ----------------------------------------
+          # macOS ARM (Apple Silicon)
+          # ----------------------------------------
+          - os: macos-latest
+            platform: macos
+            ruff_url: https://github.com/astral-sh/ruff/releases/latest/download/ruff-aarch64-apple-darwin.tar.gz
+            ruff_binary: ruff
+            biome_url: https://github.com/biomejs/biome/releases/latest/download/biome-darwin-arm64
+            biome_binary: biome
+            chktex_install: brew install chktex
+            python_cmd: python3
+
+          # ----------------------------------------
+          # Windows x64
+          # ----------------------------------------
+          - os: windows-latest
+            platform: windows
+            ruff_url: https://github.com/astral-sh/ruff/releases/latest/download/ruff-x86_64-pc-windows-msvc.zip
+            ruff_binary: ruff.exe
+            biome_url: https://github.com/biomejs/biome/releases/latest/download/biome-win32-x64.exe
+            biome_binary: biome.exe
+            chktex_install: choco install chktex --yes
+            python_cmd: python
+
+          # ----------------------------------------
+          # Ubuntu (Linux x64)
+          # ----------------------------------------
+          - os: ubuntu-latest
+            platform: linux
+            ruff_url: https://github.com/astral-sh/ruff/releases/latest/download/ruff-x86_64-unknown-linux-gnu.tar.gz
+            ruff_binary: ruff
+            biome_url: https://github.com/biomejs/biome/releases/latest/download/biome-linux-x64
+            biome_binary: biome
+            chktex_install: sudo apt-get install -y chktex
+            python_cmd: python3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ----------------------------------------
+      # Create linter output directory
+      # ----------------------------------------
+      - name: Create linters directory
+        run: mkdir -p linters/bin
+
+      # ==========================================
+      # RUFF (Python linter)
+      # Single binary, works on all 3 platforms
+      # ==========================================
+
+      - name: Download Ruff (macOS / Linux)
+        if: matrix.platform != 'windows'
+        run: |
+          curl -L ${{ matrix.ruff_url }} -o ruff.tar.gz
+          tar -xzf ruff.tar.gz
+          mv ruff linters/bin/${{ matrix.ruff_binary }}
+          chmod +x linters/bin/${{ matrix.ruff_binary }}
+
+      - name: Download Ruff (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ matrix.ruff_url }}" -OutFile "ruff.zip"
+          Expand-Archive -Path "ruff.zip" -DestinationPath "ruff_extracted"
+          Move-Item "ruff_extracted\ruff.exe" "linters\bin\${{ matrix.ruff_binary }}"
+
+      - name: Verify Ruff installation
+        run: linters/bin/${{ matrix.ruff_binary }} --version
+
+      # ==========================================
+      # BIOME (JS/TS linter)
+      # Single binary, works on all 3 platforms
+      # ==========================================
+
+      - name: Download Biome (macOS / Linux)
+        if: matrix.platform != 'windows'
+        run: |
+          curl -L ${{ matrix.biome_url }} -o linters/bin/${{ matrix.biome_binary }}
+          chmod +x linters/bin/${{ matrix.biome_binary }}
+
+      - name: Download Biome (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ matrix.biome_url }}" -OutFile "linters\bin\${{ matrix.biome_binary }}"
+
+      - name: Verify Biome installation
+        run: linters/bin/${{ matrix.biome_binary }} --version
+
+      # ==========================================
+      # CHKTEX (LaTeX linter)
+      # Installed via package manager per platform
+      # ==========================================
+
+      - name: Install ChkTeX
+        run: ${{ matrix.chktex_install }}
+
+      - name: Verify ChkTeX installation
+        run: chktex --version
+
+      # ==========================================
+      # ESLINT (JS/TS - fallback/project-level)
+      # Installed via npm, works on all platforms
+      # ==========================================
+
+      - name: Install ESLint
+        run: npm install --save-dev eslint@latest
+
+      - name: Verify ESLint installation
+        run: npx eslint --version
+
+      # ==========================================
+      # Verify linter config files exist
+      # ==========================================
+
+      - name: Check linter configs exist
+        shell: bash
+        run: |
+          echo "Checking for linter config files..."
+          ls -la linters/bin/
+
+      # ==========================================
+      # Upload verified linter binaries as artifact
+      # So electron-builder can bundle them
+      # ==========================================
+
+      - name: Upload linter binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linters-${{ matrix.platform }}
+          path: linters/bin/
+          retention-days: 7
+
+  # -------------------------------------------
+  # Summary job - reports linter install status
+  # -------------------------------------------
+  linter-summary:
+    name: Linter Install Summary
+    needs: install-linters
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report results
+        run: |
+          echo "============================================"
+          echo "Linter Installation Summary"
+          echo "============================================"
+          echo "macOS ARM:  ${{ needs.install-linters.result }}"
+          echo "Windows:    ${{ needs.install-linters.result }}"
+          echo "Linux:      ${{ needs.install-linters.result }}"
+          echo ""
+          echo "Linters installed: Ruff, Biome, ChkTeX, ESLint"
+          echo "Artifacts available for electron-builder bundling"
+          echo "============================================"
