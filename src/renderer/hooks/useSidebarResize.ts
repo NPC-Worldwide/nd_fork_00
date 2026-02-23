@@ -8,17 +8,21 @@ export function useSidebarResize() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     const [topBarHeight, setTopBarHeight] = useState<number>(() => {
-        const saved = localStorage.getItem('npcStudio_topBarHeight');
+        const saved = localStorage.getItem('incognide_topBarHeight');
         return saved ? parseInt(saved) : 48;
     });
     const [bottomBarHeight, setBottomBarHeight] = useState<number>(() => {
-        const saved = localStorage.getItem('npcStudio_bottomBarHeight');
+        const saved = localStorage.getItem('incognide_bottomBarHeight');
         return saved ? parseInt(saved) : 48;
     });
     const [isResizingTopBar, setIsResizingTopBar] = useState(false);
     const [isResizingBottomBar, setIsResizingBottomBar] = useState(false);
     const [topBarCollapsed, setTopBarCollapsed] = useState<boolean>(() => {
-        const saved = localStorage.getItem('npcStudio_topBarCollapsed');
+        const saved = localStorage.getItem('incognide_topBarCollapsed');
+        return saved === 'true';
+    });
+    const [bottomBarCollapsed, setBottomBarCollapsed] = useState<boolean>(() => {
+        const saved = localStorage.getItem('incognide_bottomBarCollapsed');
         return saved === 'true';
     });
 
@@ -76,12 +80,12 @@ export function useSidebarResize() {
         const handleTopBarResize = (e: MouseEvent) => {
             const newHeight = Math.max(32, Math.min(80, e.clientY));
             setTopBarHeight(newHeight);
-            localStorage.setItem('npcStudio_topBarHeight', String(newHeight));
+            localStorage.setItem('incognide_topBarHeight', String(newHeight));
         };
         const handleBottomBarResize = (e: MouseEvent) => {
             const newHeight = Math.max(32, Math.min(80, window.innerHeight - e.clientY));
             setBottomBarHeight(newHeight);
-            localStorage.setItem('npcStudio_bottomBarHeight', String(newHeight));
+            localStorage.setItem('incognide_bottomBarHeight', String(newHeight));
         };
         const handleMouseUp = () => {
             setIsResizingTopBar(false);
@@ -116,6 +120,7 @@ export function useSidebarResize() {
         isResizingTopBar, setIsResizingTopBar,
         isResizingBottomBar, setIsResizingBottomBar,
         topBarCollapsed, setTopBarCollapsed,
+        bottomBarCollapsed, setBottomBarCollapsed,
         handleSidebarResize,
         handleInputResize,
     };

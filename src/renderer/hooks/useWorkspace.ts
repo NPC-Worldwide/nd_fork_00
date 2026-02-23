@@ -12,18 +12,18 @@ export function useWorkspace() {
     const [workspaces, setWorkspaces] = useState(new Map());
     const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
     const [windowId] = useState(() => {
-        let id = sessionStorage.getItem('npcStudioWindowId');
+        let id = sessionStorage.getItem('incognideWindowId');
         if (!id) {
             id = `window_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            sessionStorage.setItem('npcStudioWindowId', id);
+            sessionStorage.setItem('incognideWindowId', id);
         }
         console.log('[WINDOW_ID] Using window ID:', id);
         return id;
     });
 
-    const WORKSPACES_STORAGE_KEY = 'npcStudioWorkspaces_v2';
-    const ACTIVE_WINDOWS_KEY = 'npcStudioActiveWindows';
-    const WINDOW_WORKSPACES_KEY = 'npcStudioWindowWorkspaces';
+    const WORKSPACES_STORAGE_KEY = 'incognideWorkspaces_v2';
+    const ACTIVE_WINDOWS_KEY = 'incognideActiveWindows';
+    const WINDOW_WORKSPACES_KEY = 'incognideWindowWorkspaces';
     const MAX_WORKSPACES = 50;
 
     // Load conversations without auto-selecting one

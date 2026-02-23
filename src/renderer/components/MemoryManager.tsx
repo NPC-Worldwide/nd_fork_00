@@ -94,7 +94,7 @@ const MemoryManager: React.FC<MemoryManagerProps> = ({
     const [activeTab, setActiveTab] = useState<'memories' | 'datasets'>('memories');
     const [instructionDatasets, setInstructionDatasets] = useState<InstructionDataset[]>(() => {
         try {
-            const stored = localStorage.getItem('npcStudio_instructionDatasets');
+            const stored = localStorage.getItem('incognide_instructionDatasets');
             return stored ? JSON.parse(stored) : [];
         } catch { return []; }
     });
@@ -106,7 +106,7 @@ const MemoryManager: React.FC<MemoryManagerProps> = ({
 
     // Save datasets to localStorage
     useEffect(() => {
-        localStorage.setItem('npcStudio_instructionDatasets', JSON.stringify(instructionDatasets));
+        localStorage.setItem('incognide_instructionDatasets', JSON.stringify(instructionDatasets));
     }, [instructionDatasets]);
 
     const selectedDataset = instructionDatasets.find(d => d.id === selectedDatasetId);

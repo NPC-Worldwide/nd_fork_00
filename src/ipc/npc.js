@@ -2,48 +2,133 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs/promises');
 const os = require('os');
+const crypto = require('crypto');
 const fetch = require('node-fetch');
 const yaml = require('js-yaml');
+
+// Hash a file's contents for change detection
+function hashFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath);
+    return crypto.createHash('sha256').update(content).digest('hex');
+  } catch { return null; }
+}
+
+function hashBuffer(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
 
 function register(ctx) {
   const { ipcMain, getMainWindow, callBackendApi, BACKEND_URL, log, generateId, activeStreams, appDir } = ctx;
 
   // ============== Deploy bundled incognide npc_team ==============
-  // Copy npc_team (NPCs, ctx, jinxs) and MCP servers to ~/.npcsh/incognide/npc_team/
+  // Smart deploy: only overwrite files the user hasn't modified locally.
+  // Uses .deploy_manifest.json to track hashes of last-deployed bundled files.
+  // If local file still matches last-deployed hash → safe to update.
+  // If local file was modified by user → skip, flag for review.
+  const INCOGNIDE_TEAM_PATH = path.join(os.homedir(), '.npcsh', 'incognide', 'npc_team');
+
   (async () => {
-    const destBase = path.join(os.homedir(), '.npcsh', 'incognide', 'npc_team');
+    const destBase = INCOGNIDE_TEAM_PATH;
+    const manifestPath = path.join(destBase, '.deploy_manifest.json');
     try {
       await fsPromises.mkdir(destBase, { recursive: true });
 
-      // Deploy npc_team files (ledbi.npc, incognide.ctx, jinxs/)
-      const npcTeamSrc = path.join(appDir, 'npc_team');
-      if (fs.existsSync(npcTeamSrc)) {
-        const copyRecursive = async (src, dest) => {
-          const stat = await fsPromises.stat(src);
-          if (stat.isDirectory()) {
-            await fsPromises.mkdir(dest, { recursive: true });
-            const entries = await fsPromises.readdir(src);
-            for (const entry of entries) {
-              await copyRecursive(path.join(src, entry), path.join(dest, entry));
+      // Load existing manifest (hashes of last-deployed bundled files)
+      let manifest = {};
+      try {
+        manifest = JSON.parse(await fsPromises.readFile(manifestPath, 'utf8'));
+      } catch { /* first deploy or corrupt manifest */ }
+
+      const newManifest = { ...manifest };
+      const skippedFiles = [];
+
+      // Smart deploy: compare hashes before overwriting
+      const smartCopyRecursive = async (src, dest, relBase = '') => {
+        const stat = await fsPromises.stat(src);
+        if (stat.isDirectory()) {
+          await fsPromises.mkdir(dest, { recursive: true });
+          const entries = await fsPromises.readdir(src);
+          for (const entry of entries) {
+            await smartCopyRecursive(path.join(src, entry), path.join(dest, entry), relBase ? `${relBase}/${entry}` : entry);
+          }
+        } else {
+          const relPath = relBase;
+          const srcContent = await fsPromises.readFile(src);
+          const srcHash = hashBuffer(srcContent);
+
+          if (fs.existsSync(dest)) {
+            const localHash = hashFile(dest);
+            const lastDeployedHash = manifest[relPath];
+
+            if (localHash === srcHash) {
+              // Local matches bundled — already up to date
+              newManifest[relPath] = srcHash;
+            } else if (lastDeployedHash && localHash !== lastDeployedHash) {
+              // User modified the file locally AND bundled version changed — skip
+              skippedFiles.push(relPath);
+              newManifest[relPath] = lastDeployedHash; // keep old hash
+            } else {
+              // Either first deploy (no manifest entry) with existing file that doesn't match,
+              // or local file matches last-deployed hash (user didn't change it) — safe to update
+              if (!lastDeployedHash && localHash !== srcHash) {
+                // First deploy but file exists and differs — skip to be safe
+                skippedFiles.push(relPath);
+              } else {
+                await fsPromises.copyFile(src, dest);
+                newManifest[relPath] = srcHash;
+              }
             }
           } else {
+            // File doesn't exist locally — always deploy
             await fsPromises.copyFile(src, dest);
+            newManifest[relPath] = srcHash;
           }
-        };
-        await copyRecursive(npcTeamSrc, destBase);
-        log(`[NPC] Deployed incognide npc_team to ${destBase}`);
+        }
+      };
+
+      // Deploy npc_team files
+      const npcTeamSrc = path.join(appDir, 'npc_team');
+      if (fs.existsSync(npcTeamSrc)) {
+        await smartCopyRecursive(npcTeamSrc, destBase);
+        log(`[NPC] Smart-deployed incognide npc_team to ${destBase}`);
       }
 
-      // Deploy MCP servers
+      // Deploy MCP servers (same smart logic)
       const mcpSrc = path.join(appDir, 'mcp_servers');
       if (fs.existsSync(mcpSrc)) {
         const mcpFiles = await fsPromises.readdir(mcpSrc);
         for (const file of mcpFiles) {
           if (file.endsWith('_mcp_server.py') || file === 'mcp_server.py') {
-            await fsPromises.copyFile(path.join(mcpSrc, file), path.join(destBase, file));
-            log(`[MCP] Deployed ${file} to ${destBase}`);
+            const src = path.join(mcpSrc, file);
+            const dest = path.join(destBase, file);
+            const srcContent = await fsPromises.readFile(src);
+            const srcHash = hashBuffer(srcContent);
+
+            if (fs.existsSync(dest)) {
+              const localHash = hashFile(dest);
+              const lastDeployedHash = manifest[file];
+              if (localHash !== srcHash && lastDeployedHash && localHash !== lastDeployedHash) {
+                skippedFiles.push(file);
+              } else if (!lastDeployedHash && localHash !== srcHash) {
+                skippedFiles.push(file);
+              } else {
+                await fsPromises.copyFile(src, dest);
+                newManifest[file] = srcHash;
+              }
+            } else {
+              await fsPromises.copyFile(src, dest);
+              newManifest[file] = srcHash;
+            }
           }
         }
+      }
+
+      // Save updated manifest
+      await fsPromises.writeFile(manifestPath, JSON.stringify(newManifest, null, 2));
+
+      if (skippedFiles.length > 0) {
+        log(`[NPC] Skipped ${skippedFiles.length} user-modified files: ${skippedFiles.join(', ')}`);
       }
     } catch (e) {
       console.warn('[NPC] Failed to deploy incognide npc_team:', e.message);
@@ -254,8 +339,6 @@ function register(ctx) {
     }
   });
 
-  const INCOGNIDE_TEAM_PATH = path.join(os.homedir(), '.npcsh', 'incognide', 'npc_team');
-
   // globalPath arg: defaults to incognide team. Pass 'npcsh' to get the raw npcsh global team.
   ipcMain.handle('getNPCTeamGlobal', async (event, globalPath) => {
     try {
@@ -322,32 +405,173 @@ function register(ctx) {
     }
   });
 
-  // Re-deploy incognide team (called after re-sync to restore incognide NPCs/jinxs)
+  // Re-deploy incognide team — force overwrite all files and update manifest
   ipcMain.handle('deploy-incognide-team', async () => {
-    const destBase = path.join(os.homedir(), '.npcsh', 'incognide', 'npc_team');
+    const destBase = INCOGNIDE_TEAM_PATH;
+    const manifestPath = path.join(destBase, '.deploy_manifest.json');
     try {
       await fsPromises.mkdir(destBase, { recursive: true });
       const npcTeamSrc = path.join(appDir, 'npc_team');
+      const newManifest = {};
       if (fs.existsSync(npcTeamSrc)) {
-        const copyRecursive = async (src, dest) => {
+        const copyAndTrack = async (src, dest, relBase = '') => {
           const stat = await fsPromises.stat(src);
           if (stat.isDirectory()) {
             await fsPromises.mkdir(dest, { recursive: true });
             const entries = await fsPromises.readdir(src);
             for (const entry of entries) {
-              await copyRecursive(path.join(src, entry), path.join(dest, entry));
+              await copyAndTrack(path.join(src, entry), path.join(dest, entry), relBase ? `${relBase}/${entry}` : entry);
             }
           } else {
             await fsPromises.copyFile(src, dest);
+            newManifest[relBase] = hashFile(dest);
           }
         };
-        await copyRecursive(npcTeamSrc, destBase);
-        log(`[NPC] Re-deployed incognide npc_team to ${destBase}`);
+        await copyAndTrack(npcTeamSrc, destBase);
+        await fsPromises.writeFile(manifestPath, JSON.stringify(newManifest, null, 2));
+        log(`[NPC] Force re-deployed incognide npc_team to ${destBase}`);
         return { success: true };
       }
       return { success: true };
     } catch (e) {
       return { error: e.message };
+    }
+  });
+
+  // Compare local team files vs bundled app files — returns diff status per file
+  ipcMain.handle('npc-team:compare-bundled', async () => {
+    const destBase = INCOGNIDE_TEAM_PATH;
+    const manifestPath = path.join(destBase, '.deploy_manifest.json');
+    try {
+      let manifest = {};
+      try { manifest = JSON.parse(await fsPromises.readFile(manifestPath, 'utf8')); } catch {}
+
+      const npcTeamSrc = path.join(appDir, 'npc_team');
+      const mcpSrc = path.join(appDir, 'mcp_servers');
+      const results = []; // { file, status: 'up-to-date' | 'user-modified' | 'app-updated' | 'both-changed' | 'new-from-app' | 'local-only' }
+
+      // Collect all bundled files
+      const bundledFiles = {};
+      const collectBundled = async (src, relBase = '') => {
+        if (!fs.existsSync(src)) return;
+        const stat = await fsPromises.stat(src);
+        if (stat.isDirectory()) {
+          const entries = await fsPromises.readdir(src);
+          for (const entry of entries) {
+            await collectBundled(path.join(src, entry), relBase ? `${relBase}/${entry}` : entry);
+          }
+        } else {
+          bundledFiles[relBase] = hashFile(src);
+        }
+      };
+      await collectBundled(npcTeamSrc);
+      if (fs.existsSync(mcpSrc)) {
+        const mcpFiles = await fsPromises.readdir(mcpSrc);
+        for (const f of mcpFiles) {
+          if (f.endsWith('_mcp_server.py') || f === 'mcp_server.py') {
+            bundledFiles[f] = hashFile(path.join(mcpSrc, f));
+          }
+        }
+      }
+
+      // Collect all local files (excluding manifest and .git)
+      const localFiles = {};
+      const collectLocal = async (dir, relBase = '') => {
+        if (!fs.existsSync(dir)) return;
+        const entries = await fsPromises.readdir(dir);
+        for (const entry of entries) {
+          if (entry === '.deploy_manifest.json' || entry === '.git') continue;
+          const fullPath = path.join(dir, entry);
+          const stat = await fsPromises.stat(fullPath);
+          const rel = relBase ? `${relBase}/${entry}` : entry;
+          if (stat.isDirectory()) {
+            await collectLocal(fullPath, rel);
+          } else {
+            localFiles[rel] = hashFile(fullPath);
+          }
+        }
+      };
+      await collectLocal(destBase);
+
+      // Compare
+      const allFiles = new Set([...Object.keys(bundledFiles), ...Object.keys(localFiles)]);
+      for (const file of allFiles) {
+        const bundledHash = bundledFiles[file];
+        const localHash = localFiles[file];
+        const lastDeployedHash = manifest[file];
+
+        if (bundledHash && !localHash) {
+          results.push({ file, status: 'new-from-app' });
+        } else if (!bundledHash && localHash) {
+          results.push({ file, status: 'local-only' });
+        } else if (bundledHash === localHash) {
+          results.push({ file, status: 'up-to-date' });
+        } else {
+          // Both exist, different hashes
+          const userModified = lastDeployedHash && localHash !== lastDeployedHash;
+          const appUpdated = lastDeployedHash && bundledHash !== lastDeployedHash;
+          if (userModified && appUpdated) {
+            results.push({ file, status: 'both-changed' });
+          } else if (userModified) {
+            results.push({ file, status: 'user-modified' });
+          } else if (appUpdated || !lastDeployedHash) {
+            results.push({ file, status: 'app-updated' });
+          } else {
+            results.push({ file, status: 'up-to-date' });
+          }
+        }
+      }
+
+      return { success: true, files: results };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  // Accept bundled version for a specific file (overwrite local with app version)
+  ipcMain.handle('npc-team:accept-bundled', async (event, { filePath }) => {
+    const destBase = INCOGNIDE_TEAM_PATH;
+    const manifestPath = path.join(destBase, '.deploy_manifest.json');
+    try {
+      // Find bundled source
+      const npcTeamSrc = path.join(appDir, 'npc_team');
+      let srcPath = path.join(npcTeamSrc, filePath);
+      if (!fs.existsSync(srcPath)) {
+        srcPath = path.join(appDir, 'mcp_servers', filePath);
+      }
+      if (!fs.existsSync(srcPath)) return { error: `Bundled file not found: ${filePath}` };
+
+      const destPath = path.join(destBase, filePath);
+      await fsPromises.mkdir(path.dirname(destPath), { recursive: true });
+      await fsPromises.copyFile(srcPath, destPath);
+
+      // Update manifest
+      let manifest = {};
+      try { manifest = JSON.parse(await fsPromises.readFile(manifestPath, 'utf8')); } catch {}
+      manifest[filePath] = hashFile(destPath);
+      await fsPromises.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      return { success: true };
+    } catch (e) {
+      return { error: e.message };
+    }
+  });
+
+  // Get diff between local and bundled version of a file
+  ipcMain.handle('npc-team:bundled-diff', async (event, { filePath }) => {
+    const destBase = INCOGNIDE_TEAM_PATH;
+    try {
+      const npcTeamSrc = path.join(appDir, 'npc_team');
+      let srcPath = path.join(npcTeamSrc, filePath);
+      if (!fs.existsSync(srcPath)) srcPath = path.join(appDir, 'mcp_servers', filePath);
+
+      const localPath = path.join(destBase, filePath);
+      const bundledContent = fs.existsSync(srcPath) ? await fsPromises.readFile(srcPath, 'utf8') : null;
+      const localContent = fs.existsSync(localPath) ? await fsPromises.readFile(localPath, 'utf8') : null;
+
+      return { success: true, bundledContent, localContent };
+    } catch (e) {
+      return { success: false, error: e.message };
     }
   });
 
@@ -450,7 +674,7 @@ function register(ctx) {
     };
 
     // Auto-discover MCP servers from known team directories
-    const npcshDir = path.join(os.homedir(), '.npcsh');
+    const npcshDir = ctx.NPCSH_BASE || path.join(os.homedir(), '.npcsh');
     const knownTeamDirs = [
       { dir: path.join(npcshDir, 'npc_team'), name: 'npcsh' },
       { dir: path.join(npcshDir, 'incognide', 'npc_team'), name: 'incognide' }
@@ -587,7 +811,7 @@ function register(ctx) {
   ipcMain.handle('mcp:addIntegration', async (event, { integrationId, serverScript, envVars, name } = {}) => {
     try {
       // Destination directory for MCP servers
-      const npcshDir = path.join(os.homedir(), '.npcsh');
+      const npcshDir = ctx.NPCSH_BASE || path.join(os.homedir(), '.npcsh');
       const mcpServersDir = path.join(npcshDir, 'mcp_servers');
 
       // Ensure directories exist

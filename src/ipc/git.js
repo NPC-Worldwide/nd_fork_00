@@ -252,6 +252,7 @@ function register(ctx) {
       return {
         success: true,
         current: branchSummary.current,
+        all: branchSummary.all,
         branches: branchSummary.all,
         local: branchSummary.branches
       };

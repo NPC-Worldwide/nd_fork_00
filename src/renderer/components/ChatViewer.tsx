@@ -1,25 +1,19 @@
     const getConversationStats = (messages) => {
         if (!messages || messages.length === 0) {
-            return { messageCount: 0, tokenCount: 0, models: new Set(), agents: new Set(), providers: new Set() };
+            return { messageCount: 0, inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() };
         }
 
         const stats = messages.reduce((acc, msg) => {
-        
-            if (msg.content) {
-                acc.tokenCount += Math.ceil(msg.content.length / 4);
-            }
-        
-            if (msg.reasoningContent) {
-                acc.tokenCount += Math.ceil(msg.reasoningContent.length / 4);
-            }
-            
+            acc.inputTokens += (msg.input_tokens || 0);
+            acc.outputTokens += (msg.output_tokens || 0);
+            if (msg.cost) acc.totalCost += msg.cost;
             if (msg.role !== 'user') {
                 if (msg.model) acc.models.add(msg.model);
                 if (msg.npc) acc.agents.add(msg.npc);
                 if (msg.provider) acc.providers.add(msg.provider);
             }
             return acc;
-        }, { tokenCount: 0, models: new Set(), agents: new Set(), providers: new Set() });
+        }, { inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() });
 
         return {
             messageCount: messages.length,

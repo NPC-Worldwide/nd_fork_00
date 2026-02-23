@@ -1,6 +1,6 @@
 // Workspace utility functions - NO HOOKS, just pure functions
 
-const WORKSPACES_STORAGE_KEY = 'npcStudioWorkspaces_v2';
+const WORKSPACES_STORAGE_KEY = 'incognideWorkspaces_v2';
 
 export const serializeWorkspace = (
     rootLayoutNode: any,
@@ -244,7 +244,7 @@ export const createDefaultWorkspace = async (
     updateContentPane: (paneId: string, contentType: string, contentId: string, skipLoad?: boolean) => Promise<void>,
     generateId: () => string
 ) => {
-    const LAST_ACTIVE_CONVO_ID_KEY = 'npcStudioLastConvoId';
+    const LAST_ACTIVE_CONVO_ID_KEY = 'incognideLastConvoId';
 
     // Figure out what conversation to use FIRST
     const storedConvoId = localStorage.getItem(LAST_ACTIVE_CONVO_ID_KEY);

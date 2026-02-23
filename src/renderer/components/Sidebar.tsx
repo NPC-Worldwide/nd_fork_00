@@ -90,20 +90,20 @@ const Sidebar = (props: any) => {
     } = props;
 
     const aiEnabled = useAiEnabled();
-    const WINDOW_WORKSPACES_KEY = 'npcStudioWorkspaces';
-    const ACTIVE_WINDOWS_KEY = 'npcStudioActiveWindows';
+    const WINDOW_WORKSPACES_KEY = 'incognideWorkspaces';
+    const ACTIVE_WINDOWS_KEY = 'incognideActiveWindows';
 
     // Local state for disk usage panel
     const [diskUsageCollapsed, setDiskUsageCollapsed] = useState(true);
     // State for bottom grid collapse
     const [bottomGridCollapsed, setBottomGridCollapsed] = useState<boolean>(() => {
-        const stored = localStorage.getItem('npcStudio_bottomGridCollapsed');
+        const stored = localStorage.getItem('incognide_bottomGridCollapsed');
         return stored === 'true';
     });
     // Search state for sidebar sections
     const [convoSearch, setConvoSearch] = useState('');
     const [fileSearch, setFileSearch] = useState('');
-    const [fileTypeFilter, setFileTypeFilter] = useState<string>(() => localStorage.getItem('npcStudio_fileTypeFilter') || '');
+    const [fileTypeFilter, setFileTypeFilter] = useState<string>(() => localStorage.getItem('incognide_fileTypeFilter') || '');
 
     // Drag state for section reordering
     const [draggedSection, setDraggedSection] = useState<string | null>(null);
@@ -164,7 +164,7 @@ const Sidebar = (props: any) => {
 
     // Files settings
     const [filesSettings, setFilesSettings] = useState(() => {
-        const saved = localStorage.getItem('npcStudio_filesSettings');
+        const saved = localStorage.getItem('incognide_filesSettings');
         return saved ? JSON.parse(saved) : {
             showHidden: false,
             allowedExtensions: '',  // comma-separated, empty = all
@@ -176,7 +176,7 @@ const Sidebar = (props: any) => {
 
     // Websites settings
     const [websitesSettings, setWebsitesSettings] = useState(() => {
-        const saved = localStorage.getItem('npcStudio_websitesSettings');
+        const saved = localStorage.getItem('incognide_websitesSettings');
         return saved ? JSON.parse(saved) : {
             groupByDomain: true,
             maxHistory: 100,
@@ -187,14 +187,14 @@ const Sidebar = (props: any) => {
 
     // Conversation filters
     const [showConvoFilters, setShowConvoFilters] = useState(false);
-    const [convoNpcFilter, setConvoNpcFilter] = useState<string>(() => localStorage.getItem('npcStudio_convoNpcFilter') || '');
-    const [convoModelFilter, setConvoModelFilter] = useState<string>(() => localStorage.getItem('npcStudio_convoModelFilter') || '');
-    const [convoDateFrom, setConvoDateFrom] = useState<string>(() => localStorage.getItem('npcStudio_convoDateFrom') || '');
-    const [convoDateTo, setConvoDateTo] = useState<string>(() => localStorage.getItem('npcStudio_convoDateTo') || '');
+    const [convoNpcFilter, setConvoNpcFilter] = useState<string>(() => localStorage.getItem('incognide_convoNpcFilter') || '');
+    const [convoModelFilter, setConvoModelFilter] = useState<string>(() => localStorage.getItem('incognide_convoModelFilter') || '');
+    const [convoDateFrom, setConvoDateFrom] = useState<string>(() => localStorage.getItem('incognide_convoDateFrom') || '');
+    const [convoDateTo, setConvoDateTo] = useState<string>(() => localStorage.getItem('incognide_convoDateTo') || '');
 
     // Conversations settings
     const [conversationsSettings, setConversationsSettings] = useState(() => {
-        const saved = localStorage.getItem('npcStudio_conversationsSettings');
+        const saved = localStorage.getItem('incognide_conversationsSettings');
         return saved ? JSON.parse(saved) : {
             sortBy: 'date',  // date, title, npc, model
             sortOrder: 'desc',
@@ -205,36 +205,36 @@ const Sidebar = (props: any) => {
 
     // Persist file type filter to localStorage
     useEffect(() => {
-        localStorage.setItem('npcStudio_fileTypeFilter', fileTypeFilter);
+        localStorage.setItem('incognide_fileTypeFilter', fileTypeFilter);
     }, [fileTypeFilter]);
 
     // Persist section settings
     useEffect(() => {
-        localStorage.setItem('npcStudio_filesSettings', JSON.stringify(filesSettings));
+        localStorage.setItem('incognide_filesSettings', JSON.stringify(filesSettings));
     }, [filesSettings]);
     useEffect(() => {
-        localStorage.setItem('npcStudio_websitesSettings', JSON.stringify(websitesSettings));
+        localStorage.setItem('incognide_websitesSettings', JSON.stringify(websitesSettings));
     }, [websitesSettings]);
     useEffect(() => {
-        localStorage.setItem('npcStudio_conversationsSettings', JSON.stringify(conversationsSettings));
+        localStorage.setItem('incognide_conversationsSettings', JSON.stringify(conversationsSettings));
     }, [conversationsSettings]);
 
     // Persist conversation filters to localStorage
     useEffect(() => {
-        localStorage.setItem('npcStudio_convoNpcFilter', convoNpcFilter);
+        localStorage.setItem('incognide_convoNpcFilter', convoNpcFilter);
     }, [convoNpcFilter]);
     useEffect(() => {
-        localStorage.setItem('npcStudio_convoModelFilter', convoModelFilter);
+        localStorage.setItem('incognide_convoModelFilter', convoModelFilter);
     }, [convoModelFilter]);
     useEffect(() => {
-        localStorage.setItem('npcStudio_convoDateFrom', convoDateFrom);
+        localStorage.setItem('incognide_convoDateFrom', convoDateFrom);
     }, [convoDateFrom]);
     useEffect(() => {
-        localStorage.setItem('npcStudio_convoDateTo', convoDateTo);
+        localStorage.setItem('incognide_convoDateTo', convoDateTo);
     }, [convoDateTo]);
     // Persist bottom grid collapsed state
     useEffect(() => {
-        localStorage.setItem('npcStudio_bottomGridCollapsed', String(bottomGridCollapsed));
+        localStorage.setItem('incognide_bottomGridCollapsed', String(bottomGridCollapsed));
     }, [bottomGridCollapsed]);
 
     // Load git status for current path
@@ -289,12 +289,12 @@ const Sidebar = (props: any) => {
     const [loadingKnowledge, setLoadingKnowledge] = useState(false);
     // Local state for header actions expanded/collapsed (persisted)
     const [headerActionsExpanded, setHeaderActionsExpanded] = useState(() => {
-        const saved = localStorage.getItem('npcStudio_headerActionsExpanded');
+        const saved = localStorage.getItem('incognide_headerActionsExpanded');
         return saved !== null ? JSON.parse(saved) : true;
     });
     // Persist headerActionsExpanded to localStorage
     useEffect(() => {
-        localStorage.setItem('npcStudio_headerActionsExpanded', JSON.stringify(headerActionsExpanded));
+        localStorage.setItem('incognide_headerActionsExpanded', JSON.stringify(headerActionsExpanded));
     }, [headerActionsExpanded]);
 
     // Doc dropdown state (click-based instead of hover)
@@ -317,12 +317,12 @@ const Sidebar = (props: any) => {
         } catch { return []; }
     });
     const [defaultCodeFileType, setDefaultCodeFileType] = useState<string>(() =>
-        localStorage.getItem('npcStudio_defaultCodeFileType') || 'py'
+        localStorage.getItem('incognide_defaultCodeFileType') || 'py'
     );
     
     // Persist default code file type
     useEffect(() => {
-        localStorage.setItem('npcStudio_defaultCodeFileType', defaultCodeFileType);
+        localStorage.setItem('incognide_defaultCodeFileType', defaultCodeFileType);
     }, [defaultCodeFileType]);
 
     // Common file types for quick access
@@ -345,6 +345,15 @@ const Sidebar = (props: any) => {
         { ext: 'c', label: 'C', icon: '©️' },
         { ext: 'cpp', label: 'C++', icon: '➕' },
         { ext: 'java', label: 'Java', icon: '☕' },
+        { ext: 'tex', label: 'LaTeX', icon: '📐' },
+        { ext: 'r', label: 'R', icon: '📊' },
+        { ext: 'rb', label: 'Ruby', icon: '💎' },
+        { ext: 'swift', label: 'Swift', icon: '🐦' },
+        { ext: 'kt', label: 'Kotlin', icon: '🅺' },
+        { ext: 'toml', label: 'TOML', icon: '⚙️' },
+        { ext: 'ini', label: 'INI', icon: '⚙️' },
+        { ext: 'xml', label: 'XML', icon: '📋' },
+        { ext: 'csv', label: 'CSV', icon: '📊' },
     ];
 
     // Create file with specific extension - just create untitled file directly
@@ -366,6 +375,15 @@ const Sidebar = (props: any) => {
             });
         }
     }, [currentPath, baseDir]);
+
+    // Close all header dropdowns (called when opening one to close others)
+    const closeAllDropdowns = () => {
+        setTerminalDropdownOpen(false);
+        setChatPlusDropdownOpen(false);
+        setCodeFileDropdownOpen(false);
+        setDocDropdownOpen(false);
+        setFolderDropdownOpen(false);
+    };
 
     // Close dropdowns when clicking outside
     useEffect(() => {
@@ -403,14 +421,14 @@ const Sidebar = (props: any) => {
     const [defaultNewPaneType, setDefaultNewPaneType] = useState<string>('chat');
     // Default new terminal type (system/bash, npcsh, guac)
     const [defaultNewTerminalType, setDefaultNewTerminalType] = useState<string>(() =>
-        localStorage.getItem('npcStudio_defaultNewTerminalType') || 'system'
+        localStorage.getItem('incognide_defaultNewTerminalType') || 'system'
     );
     const [defaultNewNotebookType, setDefaultNewNotebookType] = useState<string>(() =>
-        localStorage.getItem('npcStudio_defaultNewNotebookType') || 'notebook'
+        localStorage.getItem('incognide_defaultNewNotebookType') || 'notebook'
     );
     // Default new document type (docx, xlsx, pptx, mapx)
     const [defaultNewDocumentType, setDefaultNewDocumentType] = useState<string>(() =>
-        localStorage.getItem('npcStudio_defaultNewDocumentType') || 'docx'
+        localStorage.getItem('incognide_defaultNewDocumentType') || 'docx'
     );
 
     // Load default terminal/document types from global settings and listen for changes
@@ -420,11 +438,11 @@ const Sidebar = (props: any) => {
                 const data = await (window as any).api.loadGlobalSettings();
                 if (data?.global_settings?.default_new_terminal_type) {
                     setDefaultNewTerminalType(data.global_settings.default_new_terminal_type);
-                    localStorage.setItem('npcStudio_defaultNewTerminalType', data.global_settings.default_new_terminal_type);
+                    localStorage.setItem('incognide_defaultNewTerminalType', data.global_settings.default_new_terminal_type);
                 }
                 if (data?.global_settings?.default_new_document_type) {
                     setDefaultNewDocumentType(data.global_settings.default_new_document_type);
-                    localStorage.setItem('npcStudio_defaultNewDocumentType', data.global_settings.default_new_document_type);
+                    localStorage.setItem('incognide_defaultNewDocumentType', data.global_settings.default_new_document_type);
                 }
             } catch (err) {
                 console.error('Failed to load default types:', err);
@@ -480,7 +498,7 @@ const Sidebar = (props: any) => {
     useEffect(() => {
         const loadDefaultPaneType = async () => {
             // First check localStorage for immediate value
-            const cached = localStorage.getItem('npcStudio_defaultNewPaneType');
+            const cached = localStorage.getItem('incognide_defaultNewPaneType');
             if (cached) {
                 setDefaultNewPaneType(cached);
             }
@@ -489,7 +507,7 @@ const Sidebar = (props: any) => {
                 const data = await (window as any).api.loadGlobalSettings();
                 if (data?.global_settings?.default_new_pane_type) {
                     setDefaultNewPaneType(data.global_settings.default_new_pane_type);
-                    localStorage.setItem('npcStudio_defaultNewPaneType', data.global_settings.default_new_pane_type);
+                    localStorage.setItem('incognide_defaultNewPaneType', data.global_settings.default_new_pane_type);
                 }
             } catch (err) {
                 console.error('Failed to load default pane type:', err);
@@ -499,7 +517,7 @@ const Sidebar = (props: any) => {
 
         // Listen for storage changes (when settings are saved from other tabs)
         const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'npcStudio_defaultNewPaneType' && e.newValue) {
+            if (e.key === 'incognide_defaultNewPaneType' && e.newValue) {
                 setDefaultNewPaneType(e.newValue);
             }
         };
@@ -3300,6 +3318,7 @@ const renderFolderList = (structure) => {
                                 const rect = folderButtonRef.current.getBoundingClientRect();
                                 setFolderDropdownPos({ top: rect.bottom + 4, left: rect.left });
                             }
+                            closeAllDropdowns();
                             setFolderDropdownOpen(!folderDropdownOpen);
                         }}
                         className="flex items-center gap-0.5 p-1 theme-hover transition-colors rounded text-gray-400 hover:text-yellow-400"
@@ -3750,6 +3769,11 @@ const renderFolderList = (structure) => {
             {!filesCollapsed && (
                 <div
                     className="theme-bg-secondary flex-1 min-h-0 overflow-y-auto"
+                    onContextMenu={(e) => {
+                        // Right-click on empty space shows folder operations for current workspace
+                        if ((e.target as HTMLElement).closest('button, [draggable]')) return;
+                        handleSidebarItemContextMenu(e, currentPath, 'directory');
+                    }}
                     onDragOver={(e) => {
                         // Accept file/folder drops onto the root workspace area
                         const types = e.dataTransfer.types;
@@ -4219,9 +4243,24 @@ const renderFolderList = (structure) => {
         const totalChanges = staged.length + unstaged.length + untracked.length + conflicted.length;
 
         const openDiffViewer = (filePath: string, status: string) => {
-            // Open a diff pane for this file
             const paneId = generateId();
             const fullPath = filePath.startsWith('/') ? filePath : `${currentPath}/${filePath}`;
+            const ext = filePath.split('.').pop()?.toLowerCase() || '';
+
+            // Binary files can't be diffed meaningfully - open directly in appropriate viewer
+            const binaryExtensions = ['pdf', 'docx', 'doc', 'pptx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'mp3', 'mp4', 'wav', 'zip', 'tar', 'gz', 'dmg', 'exe'];
+            if (binaryExtensions.includes(ext)) {
+                let contentType = 'editor';
+                if (ext === 'pdf') contentType = 'pdf';
+                else if (['csv', 'xlsx', 'xls'].includes(ext)) contentType = 'csv';
+                else if (['docx', 'doc'].includes(ext)) contentType = 'docx';
+                else if (ext === 'pptx') contentType = 'pptx';
+                else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) contentType = 'image';
+                const newPane = { id: paneId, contentType, contentId: fullPath };
+                if (createAndAddPaneNodeToLayout) createAndAddPaneNodeToLayout(newPane);
+                return;
+            }
+
             const newPane = {
                 id: paneId,
                 contentType: 'diff',
@@ -4798,6 +4837,15 @@ const getPlaceholderText = () => {
 
 return (
     <>
+    {sidebarCollapsed && (
+        <div
+            className="w-1 hover:w-4 flex items-center justify-center cursor-pointer theme-sidebar border-r theme-border transition-all group flex-shrink-0"
+            onClick={() => setSidebarCollapsed(false)}
+            title="Show sidebar"
+        >
+            <ChevronRight size={10} className="opacity-0 group-hover:opacity-60" />
+        </div>
+    )}
     <div
         data-tutorial="sidebar"
         className="border-r theme-border flex flex-col flex-shrink-0 theme-sidebar relative"
@@ -4846,7 +4894,7 @@ return (
                         {defaultNewTerminalType === 'guac' && <Code2 size={18} className="text-yellow-400" />}
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); setTerminalDropdownOpen(!terminalDropdownOpen); }}
+                        onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setTerminalDropdownOpen(!terminalDropdownOpen); }}
                         className="absolute top-0 right-0 w-1/2 h-1/2 flex items-center justify-center theme-hover rounded-bl transition-colors"
                         title="More terminal options"
                     >
@@ -4890,13 +4938,13 @@ return (
                 <div className="relative" data-dropdown="notebook" data-tutorial="notebook-button">
                     <button
                         onClick={() => defaultNewNotebookType === 'notebook' ? createNewNotebook?.() : createNewExperiment?.()}
-                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 py-4 relative transition-colors"
+                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 relative transition-colors"
                         title={`New ${defaultNewNotebookType === 'notebook' ? 'Notebook' : 'Experiment'}`}
                     >
                         {defaultNewNotebookType === 'notebook' ? <FileText size={18} className="text-orange-400" /> : <FlaskConical size={18} className="text-purple-400" />}
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); setChatPlusDropdownOpen(!chatPlusDropdownOpen); }}
+                        onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setChatPlusDropdownOpen(!chatPlusDropdownOpen); }}
                         className="absolute top-0 right-0 w-1/2 h-1/2 flex items-center justify-center theme-hover rounded-bl transition-colors"
                         title="More options"
                     >
@@ -4928,13 +4976,13 @@ return (
                 <div className="relative" data-dropdown="code-file" data-tutorial="code-file-button">
                     <button
                         onClick={() => createFileWithExtension(defaultCodeFileType)}
-                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 py-4 relative transition-colors"
+                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 relative transition-colors"
                         title={`New .${defaultCodeFileType} file`}
                     >
                         <Code2 size={18} className="text-cyan-400" />
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); setCodeFileDropdownOpen(!codeFileDropdownOpen); }}
+                        onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setCodeFileDropdownOpen(!codeFileDropdownOpen); }}
                         className="absolute top-0 right-0 w-1/2 h-1/2 flex items-center justify-center theme-hover rounded-bl transition-colors"
                         title="More file types"
                     >
@@ -4963,13 +5011,13 @@ return (
                 <div className="relative" data-dropdown="doc" data-tutorial="document-button">
                     <button
                         onClick={() => createNewDocument?.(defaultNewDocumentType)}
-                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 py-4 relative transition-colors"
+                        className="w-full h-full flex items-center justify-center hover:bg-teal-500/20 relative transition-colors"
                         title={`New ${defaultNewDocumentType.toUpperCase()} document`}
                     >
                         <FileStack size={18} className="text-rose-400" />
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); setDocDropdownOpen(!docDropdownOpen); }}
+                        onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setDocDropdownOpen(!docDropdownOpen); }}
                         className="absolute top-0 right-0 w-1/2 h-1/2 flex items-center justify-center theme-hover rounded-bl transition-colors"
                         title="More document types"
                     >

@@ -38,15 +38,31 @@ const FRONTEND_PORT = IS_DEV_MODE ? 7337 : 6337;
 const BACKEND_PORT = IS_DEV_MODE ? 5437 : 5337;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 
+// Read INCOGNIDE_HOME from .npcshrc early (before app paths are set)
+let NPCSH_BASE = path.join(os.homedir(), '.npcsh');
+try {
+  const _rcPath = path.join(os.homedir(), '.npcshrc');
+  if (fs.existsSync(_rcPath)) {
+    const _rcContent = fs.readFileSync(_rcPath, 'utf-8');
+    const _match = _rcContent.match(/^(?:export\s+)?INCOGNIDE_HOME=(.*)$/m);
+    if (_match) {
+      let _val = _match[1].trim();
+      if ((_val.startsWith('"') && _val.endsWith('"')) || (_val.startsWith("'") && _val.endsWith("'"))) _val = _val.slice(1, -1);
+      if (_val.startsWith('~')) _val = _val.replace('~', os.homedir());
+      if (_val) NPCSH_BASE = _val;
+    }
+  }
+} catch {}
+
 // Use separate user data paths for dev vs prod to allow running both simultaneously
 if (IS_DEV_MODE) {
-  app.setPath('userData', path.join(os.homedir(), '.npcsh', 'incognide-dev'));
+  app.setPath('userData', path.join(NPCSH_BASE, 'incognide-dev'));
 } else {
-  app.setPath('userData', path.join(os.homedir(), '.npcsh', 'incognide'));
+  app.setPath('userData', path.join(NPCSH_BASE, 'incognide'));
 }
 
-// Centralized logging setup - all logs go to ~/.npcsh/incognide/logs/
-const logsDir = path.join(os.homedir(), '.npcsh', 'incognide', 'logs');
+// Centralized logging setup - all logs go to <NPCSH_BASE>/incognide/logs/
+const logsDir = path.join(NPCSH_BASE, 'incognide', 'logs');
 try {
   fs.mkdirSync(logsDir, { recursive: true });
 } catch (err) {
@@ -555,6 +571,19 @@ function getWorkspacePathForWebContents(webContents) {
 app.on('web-contents-created', (event, contents) => {
   // Handle context menu for webviews
   contents.on('context-menu', async (e, params) => {
+    // For main renderer: show native edit menu on editable fields (inputs, textareas)
+    if (contents.getType() !== 'webview' && params.isEditable) {
+      const menu = Menu.buildFromTemplate([
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { type: 'separator' },
+        { role: 'selectAll' },
+      ]);
+      menu.popup();
+      return;
+    }
+
     // Only handle for webviews (type 'webview')
     if (contents.getType() === 'webview') {
       e.preventDefault();
@@ -569,13 +598,16 @@ app.on('web-contents-created', (event, contents) => {
 
       log(`[CONTEXT MENU] Webview context menu: selectedText="${selectedText.substring(0, 50)}...", linkURL="${linkURL}", mediaType="${mediaType}"`);
 
-      // Send context menu event to renderer
-      if (mainWindow && !mainWindow.isDestroyed()) {
+      // Send context menu event to renderer — route to the correct parent window
+      const ctxParentWin = BrowserWindow.fromWebContents(contents.hostWebContents || contents)
+        || BrowserWindow.getFocusedWindow()
+        || BrowserWindow.getAllWindows()[0];
+      if (ctxParentWin && !ctxParentWin.isDestroyed()) {
         // Get exact cursor position from screen
         const cursorPos = screen.getCursorScreenPoint();
-        const windowBounds = mainWindow.getBounds();
+        const windowBounds = ctxParentWin.getBounds();
 
-        mainWindow.webContents.send('browser-show-context-menu', {
+        ctxParentWin.webContents.send('browser-show-context-menu', {
           x: cursorPos.x - windowBounds.x,
           y: cursorPos.y - windowBounds.y,
           selectedText,
@@ -643,10 +675,32 @@ app.on('web-contents-created', (event, contents) => {
         return { action: 'allow' };
       }
 
+      // SSO/OAuth auth flows — allow as popup so tokens stay in the webview's session
+      const AUTH_PATTERNS = [
+        'accounts.google.com', 'accounts.youtube.com', 'myaccount.google.com',
+        'login.microsoftonline.com', 'login.live.com', 'login.windows.net',
+        'github.com/login', 'github.com/sessions',
+        'auth0.com', 'okta.com', 'onelogin.com',
+        'sso.', '/oauth', '/auth/', '/login', '/signin', '/saml',
+        'appleid.apple.com', 'idmsa.apple.com',
+        'api.twitter.com/oauth', 'x.com/i/oauth',
+        'facebook.com/v', 'facebook.com/dialog',
+        'linkedin.com/oauth',
+        'contacts.google.com/widget', 'apis.google.com',
+        'plus.google.com', 'drive.google.com',
+      ];
+      if (AUTH_PATTERNS.some(p => url.includes(p))) {
+        log(`[WebView] Allowing auth/SSO popup: ${url}`);
+        return { action: 'allow' };
+      }
+
       // For real URLs, deny the popup and open in our tab system
       log(`[WebView] Intercepting window.open: ${url} (disposition: ${disposition})`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('browser-open-in-new-tab', {
+      const parentWin = BrowserWindow.fromWebContents(contents.hostWebContents || contents)
+        || BrowserWindow.getFocusedWindow()
+        || BrowserWindow.getAllWindows()[0];
+      if (parentWin && !parentWin.isDestroyed()) {
+        parentWin.webContents.send('browser-open-in-new-tab', {
           url,
           disposition // 'background-tab', 'foreground-tab', 'new-window', etc.
         });
@@ -659,8 +713,11 @@ app.on('web-contents-created', (event, contents) => {
       const checkAndRedirect = (realUrl) => {
         if (realUrl && realUrl !== 'about:blank') {
           log(`[WebView] Popup navigated to: ${realUrl} - redirecting to app tab`);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('browser-open-in-new-tab', {
+          const parentWin = BrowserWindow.fromWebContents(contents.hostWebContents || contents)
+            || BrowserWindow.getFocusedWindow()
+            || BrowserWindow.getAllWindows()[0];
+          if (parentWin && !parentWin.isDestroyed()) {
+            parentWin.webContents.send('browser-open-in-new-tab', {
               url: realUrl,
               disposition: 'new-window'
             });
@@ -720,9 +777,12 @@ app.on('web-contents-created', (event, contents) => {
         // Cancel immediately - renderer will handle via download manager
         item.cancel();
 
-        // Send to renderer's download manager
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('browser-download-requested', {
+        // Send to renderer's download manager — route to the correct parent window
+        const dlParentWin = BrowserWindow.fromWebContents(contents.hostWebContents || contents)
+          || BrowserWindow.getFocusedWindow()
+          || BrowserWindow.getAllWindows()[0];
+        if (dlParentWin && !dlParentWin.isDestroyed()) {
+          dlParentWin.webContents.send('browser-download-requested', {
             url,
             filename,
             mimeType: item.getMimeType(),
@@ -2084,6 +2144,7 @@ registerAll({
   backendLogPath,
   ensureTablesExist,
   appDir: __dirname,
+  NPCSH_BASE,
 });
 
 // Handler that needs createWindow from main.js scope

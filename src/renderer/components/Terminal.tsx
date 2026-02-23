@@ -381,6 +381,36 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
                 fitAddon.fit();
             });
 
+            // Register link provider for file:line:col patterns (clickable error paths)
+            // Matches: /path/to/file.ext:123:45, ./file.ext:123, file.py:123
+            term.registerLinkProvider({
+                provideLinks: (lineNumber: number, callback: (links: any[]) => void) => {
+                    const line = term.buffer.active.getLine(lineNumber - 1);
+                    if (!line) { callback([]); return; }
+                    const text = line.translateToString();
+                    const links: any[] = [];
+                    // Match file:line or file:line:col patterns
+                    const regex = /(?:^|\s|['"`(])([.\/~]?(?:[\w\-./]+\/)?[\w\-]+\.[\w]+):(\d+)(?::(\d+))?/g;
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        const filePath = match[1];
+                        const line = parseInt(match[2]);
+                        const col = match[3] ? parseInt(match[3]) : 1;
+                        const startIdx = match.index + match[0].indexOf(filePath);
+                        links.push({
+                            range: { start: { x: startIdx + 1, y: lineNumber }, end: { x: startIdx + filePath.length + 1 + match[2].length + (match[3] ? match[3].length + 1 : 0), y: lineNumber } },
+                            text: `${filePath}:${line}${match[3] ? ':' + col : ''}`,
+                            activate: () => {
+                                window.dispatchEvent(new CustomEvent('terminal-open-file', {
+                                    detail: { filePath, line, col, currentPath }
+                                }));
+                            }
+                        });
+                    }
+                    callback(links);
+                }
+            });
+
             // Debounced resize handler to prevent rapid resize events causing cursor desync
             let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
             const resizeObserver = new ResizeObserver(() => {
@@ -418,6 +448,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
 
                 const isMeta = event.ctrlKey || event.metaKey;
                 const key = event.key.toLowerCase();
+                const isMac = navigator.platform.toLowerCase().includes('mac');
 
                 // Tab key - send tab character to terminal for shell completion
                 // Must prevent default to avoid browser focus navigation
@@ -494,15 +525,19 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
                     return false;
                 }
 
-                // Cmd+A (Mac) or Ctrl+Shift+A (non-Mac) - Select all terminal content
-                if ((event.metaKey && !event.ctrlKey && key === 'a') ||
-                    (event.ctrlKey && event.shiftKey && key === 'a')) {
+                // Select all: Cmd+A (Mac), Ctrl+A (non-Mac), or Ctrl+Shift+A (any)
+                if (key === 'a' && (
+                    (event.metaKey && !event.ctrlKey) ||
+                    (!isMac && event.ctrlKey && !event.metaKey && !event.shiftKey) ||
+                    (event.ctrlKey && event.shiftKey)
+                )) {
                     term.selectAll();
                     return false;
                 }
 
-                // Ctrl+A - Go to beginning of line (Ctrl only, not Cmd)
-                if (event.ctrlKey && !event.metaKey && !event.shiftKey && key === 'a') {
+                // Ctrl+A on Mac only - Go to beginning of line (readline behavior)
+                // Non-Mac uses Ctrl+A for select all instead
+                if (isMac && event.ctrlKey && !event.metaKey && !event.shiftKey && key === 'a') {
                     event.preventDefault();
                     event.stopPropagation();
                     if (isSessionReady.current) {

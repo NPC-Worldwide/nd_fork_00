@@ -277,7 +277,7 @@ let jinxInitialCompileDone = false;
 // ==================== VERSION / UPDATE ====================
 const packageJson = require('../../package.json');
 const APP_VERSION = packageJson.version;
-const UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/npcww/npc-core/main/incognide/package.json';
+const UPDATE_MANIFEST_URL = 'https://storage.googleapis.com/incognide-executables/manifest.json';
 
 // ==================== HELPER: resolvePythonPath ====================
 // Helper to resolve Python path from config or detect from workspace
@@ -634,6 +634,17 @@ function register(ctx) {
         updatedAt: Date.now()
       };
       await writePythonEnvConfig(config);
+
+      // Also update .npcshrc with the resolved Python path
+      try {
+        const pythonInfo = await resolvePythonPath(workspacePath, envConfig, getBackendPythonPath);
+        if (pythonInfo?.pythonPath) {
+          saveBackendPythonPath(pythonInfo.pythonPath);
+        }
+      } catch (rcErr) {
+        console.error('Error updating .npcshrc:', rcErr);
+      }
+
       return { success: true };
     } catch (err) {
       console.error('Error saving python env config:', err);
@@ -1764,8 +1775,131 @@ function register(ctx) {
     return {
         size: stats.size,
         mtime: stats.mtime,
+        mtimeMs: stats.mtimeMs,
         ctime: stats.ctime
     };
+  });
+
+  // ==================== LINT FILE ====================
+
+  ipcMain.handle('lintFile', async (event, { filePath, content, language }) => {
+    const { execFile } = require('child_process');
+    const tmpdir = os.tmpdir();
+    const path = require('path');
+
+    try {
+      if (language === 'python') {
+        // Try ruff first, fall back to pyflakes
+        const tmpFile = path.join(tmpdir, `incognide_lint_${Date.now()}.py`);
+        await fsPromises.writeFile(tmpFile, content);
+        try {
+          const result = await new Promise((resolve, reject) => {
+            execFile('ruff', ['check', '--output-format=json', '--no-fix', tmpFile], { timeout: 10000 }, (err, stdout) => {
+              // ruff returns exit code 1 when there are lint errors, that's fine
+              try { resolve(JSON.parse(stdout || '[]')); } catch { resolve([]); }
+            });
+          });
+          await fsPromises.unlink(tmpFile).catch(() => {});
+          return (result || []).map(d => ({
+            from: { line: (d.location?.row || 1) - 1, col: (d.location?.column || 1) - 1 },
+            to: { line: (d.end_location?.row || d.location?.row || 1) - 1, col: (d.end_location?.column || d.location?.column || 1) - 1 },
+            message: `${d.code || ''}: ${d.message || ''}`.trim(),
+            severity: d.code?.startsWith('E') ? 'error' : 'warning',
+          }));
+        } catch {
+          // ruff not available, try pyflakes
+          try {
+            const result = await new Promise((resolve) => {
+              execFile('pyflakes', [tmpFile], { timeout: 10000 }, (err, stdout, stderr) => {
+                const output = (stdout || '') + (stderr || '');
+                const diagnostics = output.split('\n').filter(Boolean).map(line => {
+                  const match = line.match(/:(\d+):(?:(\d+):)?\s*(.+)/);
+                  if (match) {
+                    return {
+                      from: { line: parseInt(match[1]) - 1, col: match[2] ? parseInt(match[2]) - 1 : 0 },
+                      to: { line: parseInt(match[1]) - 1, col: match[2] ? parseInt(match[2]) : 999 },
+                      message: match[3],
+                      severity: 'warning',
+                    };
+                  }
+                  return null;
+                }).filter(Boolean);
+                resolve(diagnostics);
+              });
+            });
+            await fsPromises.unlink(tmpFile).catch(() => {});
+            return result;
+          } catch {
+            await fsPromises.unlink(tmpFile).catch(() => {});
+            return [];
+          }
+        }
+      }
+
+      if (language === 'javascript' || language === 'typescript') {
+        // Use eslint if available
+        const tmpExt = language === 'typescript' ? '.ts' : '.js';
+        const tmpFile = path.join(tmpdir, `incognide_lint_${Date.now()}${tmpExt}`);
+        await fsPromises.writeFile(tmpFile, content);
+        try {
+          const result = await new Promise((resolve) => {
+            execFile('eslint', ['--format=json', '--no-eslintrc', '--rule', '{"no-undef":"warn","no-unused-vars":"warn","no-extra-semi":"error","no-dupe-keys":"error","no-unreachable":"error","no-constant-condition":"warn","no-empty":"warn","valid-typeof":"error"}', tmpFile], { timeout: 10000 }, (err, stdout) => {
+              try {
+                const parsed = JSON.parse(stdout || '[]');
+                const msgs = parsed[0]?.messages || [];
+                resolve(msgs.map(m => ({
+                  from: { line: (m.line || 1) - 1, col: (m.column || 1) - 1 },
+                  to: { line: (m.endLine || m.line || 1) - 1, col: (m.endColumn || m.column || 1) - 1 },
+                  message: `${m.ruleId || ''}: ${m.message || ''}`.trim(),
+                  severity: m.severity === 2 ? 'error' : 'warning',
+                })));
+              } catch { resolve([]); }
+            });
+          });
+          await fsPromises.unlink(tmpFile).catch(() => {});
+          return result;
+        } catch {
+          await fsPromises.unlink(tmpFile).catch(() => {});
+          return [];
+        }
+      }
+
+      if (language === 'tex') {
+        // Use chktex if available
+        const tmpFile = path.join(tmpdir, `incognide_lint_${Date.now()}.tex`);
+        await fsPromises.writeFile(tmpFile, content);
+        try {
+          const result = await new Promise((resolve) => {
+            execFile('chktex', ['-q', '-f', '%l:%c:%k:%m\\n', tmpFile], { timeout: 10000 }, (err, stdout) => {
+              const output = stdout || '';
+              const diagnostics = output.split('\n').filter(Boolean).map(line => {
+                const match = line.match(/^(\d+):(\d+):(\w+):(.+)/);
+                if (match) {
+                  return {
+                    from: { line: parseInt(match[1]) - 1, col: parseInt(match[2]) - 1 },
+                    to: { line: parseInt(match[1]) - 1, col: parseInt(match[2]) },
+                    message: match[4].trim(),
+                    severity: match[3] === 'Error' ? 'error' : 'warning',
+                  };
+                }
+                return null;
+              }).filter(Boolean);
+              resolve(diagnostics);
+            });
+          });
+          await fsPromises.unlink(tmpFile).catch(() => {});
+          return result;
+        } catch {
+          await fsPromises.unlink(tmpFile).catch(() => {});
+          return [];
+        }
+      }
+
+      return [];
+    } catch (err) {
+      console.error('Lint error:', err);
+      return [];
+    }
   });
 
   // ==================== PROMPT DIALOG ====================
@@ -2313,12 +2447,22 @@ function register(ctx) {
 
         log(`[UPDATE] Latest version: ${latestVersion}, Has update: ${hasUpdate}`);
 
+        const platform = process.platform;
+        const arch = process.arch;
+        let platformKey = 'macos-arm64';
+        if (platform === 'win32') platformKey = 'windows-x64';
+        else if (platform === 'linux') platformKey = arch === 'arm64' ? 'linux-arm64' : 'linux-x64';
+        else if (platform === 'darwin') platformKey = arch === 'arm64' ? 'macos-arm64' : 'macos-x64';
+
+        const releaseUrl = manifest.downloads?.[platformKey] || 'https://storage.googleapis.com/incognide-executables/manifest.json';
+
         return {
             success: true,
             currentVersion: APP_VERSION,
             latestVersion,
             hasUpdate,
-            releaseUrl: 'https://github.com/npcww/npc-core/releases'
+            releaseUrl,
+            downloads: manifest.downloads || {},
         };
     } catch (err) {
         log(`[UPDATE] Error checking for updates: ${err.message}`);
@@ -2327,6 +2471,64 @@ function register(ctx) {
   });
 
   ipcMain.handle('get-app-version', () => APP_VERSION);
+
+  // Download and install update
+  ipcMain.handle('download-and-install-update', async (event, { releaseUrl }) => {
+    try {
+      log(`[UPDATE] Downloading update from: ${releaseUrl}`);
+      const tmpDir = path.join(os.tmpdir(), 'incognide-update');
+      await fsPromises.mkdir(tmpDir, { recursive: true });
+
+      const fileName = path.basename(new URL(releaseUrl).pathname) || 'incognide-update';
+      const filePath = path.join(tmpDir, fileName);
+
+      // Download with progress
+      const response = await fetch(releaseUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+
+      const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
+      let receivedBytes = 0;
+      const fileStream = fs.createWriteStream(filePath);
+
+      await new Promise((resolve, reject) => {
+        response.body.on('data', (chunk) => {
+          receivedBytes += chunk.length;
+          if (totalBytes > 0) {
+            const progress = Math.round((receivedBytes / totalBytes) * 100);
+            event.sender.send('update-download-progress', { progress, receivedBytes, totalBytes });
+          }
+        });
+        response.body.pipe(fileStream);
+        response.body.on('error', reject);
+        fileStream.on('finish', resolve);
+        fileStream.on('error', reject);
+      });
+
+      log(`[UPDATE] Downloaded to: ${filePath}`);
+
+      // Open the installer
+      const platform = process.platform;
+      if (platform === 'darwin' && filePath.endsWith('.dmg')) {
+        // Mount DMG and open it
+        spawn('open', [filePath], { detached: true, stdio: 'ignore' });
+      } else if (platform === 'win32') {
+        spawn(filePath, [], { detached: true, stdio: 'ignore' });
+      } else if (platform === 'linux') {
+        // For AppImage or deb
+        if (filePath.endsWith('.AppImage')) {
+          await fsPromises.chmod(filePath, '755');
+          spawn(filePath, [], { detached: true, stdio: 'ignore' });
+        } else {
+          spawn('xdg-open', [filePath], { detached: true, stdio: 'ignore' });
+        }
+      }
+
+      return { success: true, filePath };
+    } catch (err) {
+      log(`[UPDATE] Download error: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { register, readPythonEnvConfig };

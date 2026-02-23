@@ -350,12 +350,22 @@ function register(ctx) {
     wc.setWindowOpenHandler(({ url, disposition }) => {
       log('[Browser] window.open intercepted:', url, 'disposition:', disposition);
 
-      // Google auth — allow as popup so OAuth tokens stay in the webview's session
-      // (opening in system browser breaks gcloud login, Google Drive, Colab auth flows)
-      if (url.includes('accounts.google.com') ||
-          url.includes('accounts.youtube.com') ||
-          url.includes('myaccount.google.com')) {
-        log('[Browser] Allowing Google auth popup in-app for OAuth flow');
+      // SSO/OAuth auth flows — allow as popup so tokens stay in the webview's session
+      const AUTH_PATTERNS = [
+        'accounts.google.com', 'accounts.youtube.com', 'myaccount.google.com',
+        'login.microsoftonline.com', 'login.live.com', 'login.windows.net',
+        'github.com/login', 'github.com/sessions',
+        'auth0.com', 'okta.com', 'onelogin.com',
+        'sso.', '/oauth', '/auth/', '/login', '/signin', '/saml',
+        'appleid.apple.com', 'idmsa.apple.com',
+        'api.twitter.com/oauth', 'x.com/i/oauth',
+        'facebook.com/v', 'facebook.com/dialog',
+        'linkedin.com/oauth',
+        'contacts.google.com/widget', 'apis.google.com',
+        'plus.google.com', 'drive.google.com',
+      ];
+      if (AUTH_PATTERNS.some(p => url.includes(p))) {
+        log('[Browser] Allowing auth/SSO popup in-app:', url);
         return { action: 'allow' };
       }
 
@@ -367,14 +377,6 @@ function register(ctx) {
           mw.webContents.send('browser-open-in-new-tab', { url, disposition });
         }
         return { action: 'deny' };
-      }
-
-      // Google widgets (contacts hovercard, etc.) - allow as popups
-      if (url.includes('contacts.google.com/widget') ||
-          url.includes('apis.google.com') ||
-          url.includes('plus.google.com') ||
-          url.includes('drive.google.com')) {
-        return { action: 'allow' };
       }
 
       // about:blank or empty URLs: sites like Google Drive call window.open('')

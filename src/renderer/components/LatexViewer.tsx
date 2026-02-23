@@ -538,7 +538,10 @@ const LatexViewer = ({
     setDraggedItem,
     setPaneContextMenu,
     closeContentPane,
-    performSplit
+    performSplit,
+    onToggleZen,
+    isZenMode,
+    onClose,
 }: any) => {
     const paneData = contentDataRef.current[nodeId];
     const filePath = paneData?.contentId;
@@ -708,11 +711,34 @@ const LatexViewer = ({
     // Parse compile errors
     const parseErrors = useMemo(() => {
         const errors: { line: number; message: string }[] = [];
-        const regex = /^l\.(\d+)\s+(.+)$/gm;
+        if (!compileLog) return errors;
+
+        // Standard line errors: l.XX message
+        const lineRegex = /^l\.(\d+)\s+(.+)$/gm;
         let match;
-        while ((match = regex.exec(compileLog)) !== null) {
+        while ((match = lineRegex.exec(compileLog)) !== null) {
             errors.push({ line: parseInt(match[1]), message: match[2] });
         }
+
+        // LaTeX errors: ! error message (missing packages, classes, etc.)
+        const bangRegex = /^!\s+(.+)$/gm;
+        while ((match = bangRegex.exec(compileLog)) !== null) {
+            const msg = match[1].trim();
+            // Skip if already captured as a line error
+            if (!errors.some(e => e.message.includes(msg))) {
+                errors.push({ line: 0, message: msg });
+            }
+        }
+
+        // Package/class not found: File `foo.sty' not found / File `foo.cls' not found
+        const fileNotFoundRegex = /File [`']([^']+)' not found/gi;
+        while ((match = fileNotFoundRegex.exec(compileLog)) !== null) {
+            const msg = `Missing file: ${match[1]}`;
+            if (!errors.some(e => e.message === msg)) {
+                errors.push({ line: 0, message: msg });
+            }
+        }
+
         return errors;
     }, [compileLog]);
 
@@ -923,6 +949,30 @@ const LatexViewer = ({
             override: [citationCompletion, latexCommandCompletion],
         }),
         keymap.of([
+            { key: 'Mod-/', run: (view) => {
+                const { from, to } = view.state.selection.main;
+                const startLine = view.state.doc.lineAt(from);
+                const endLine = view.state.doc.lineAt(to);
+                const lines: { from: number; to: number; text: string }[] = [];
+                for (let pos = startLine.from; pos <= endLine.to;) {
+                    const line = view.state.doc.lineAt(pos);
+                    lines.push({ from: line.from, to: line.to, text: line.text });
+                    pos = line.to + 1;
+                    if (pos > view.state.doc.length) break;
+                }
+                const allCommented = lines.every(l => l.text.trimStart().startsWith('%'));
+                const changes = lines.map(l => {
+                    if (allCommented) {
+                        const idx = l.text.indexOf('%');
+                        const removeLen = l.text[idx + 1] === ' ' ? 2 : 1;
+                        return { from: l.from + idx, to: l.from + idx + removeLen, insert: '' };
+                    } else {
+                        return { from: l.from, to: l.from, insert: '% ' };
+                    }
+                });
+                view.dispatch({ changes });
+                return true;
+            }},
             ...closeBracketsKeymap,
             ...defaultKeymap,
             ...searchKeymap,
@@ -1194,7 +1244,8 @@ const LatexViewer = ({
         setShowLog(true);
 
         try {
-            const res = await (window as any).api.compileLatex(filePath);
+            const needsBibtex = bibFilePath || /\\bibliography\{|\\addbibresource\{|\\printbibliography/.test(content);
+            const res = await (window as any).api.compileLatex(filePath, { bibtex: !!needsBibtex });
             const log = res?.log || res?.error || '';
             setCompileLog(log);
 
@@ -1322,9 +1373,45 @@ const LatexViewer = ({
 
     return (
         <div className="h-full flex flex-col overflow-hidden theme-bg-primary">
-            {/* Toolbar */}
-            <div className="flex items-center gap-0.5 px-2 h-10 flex-shrink-0 theme-bg-secondary border-b theme-border">
-                {/* Outline toggle — leftmost */}
+            {/* Toolbar (also serves as pane header — draggable, with close/zen) */}
+            <div
+                className="flex items-center gap-0.5 px-1 h-10 flex-shrink-0 theme-bg-secondary border-b theme-border"
+                style={{ cursor: 'move' }}
+                draggable
+                onDragStart={(e) => {
+                    const nodePath = findNodePath(rootLayoutNode, nodeId);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('application/json', JSON.stringify({ type: 'pane', id: nodeId, nodePath }));
+                    setTimeout(() => { setDraggedItem?.({ type: 'pane', id: nodeId, nodePath }); }, 0);
+                }}
+                onDragEnd={() => setDraggedItem?.(null)}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const nodePath = findNodePath(rootLayoutNode, nodeId);
+                    setPaneContextMenu?.({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, nodePath });
+                }}
+            >
+                {/* Zen mode toggle */}
+                {onToggleZen && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleZen(); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={`p-1 theme-hover rounded flex-shrink-0 ${isZenMode ? 'text-blue-400' : 'text-gray-400 hover:text-blue-400'}`}
+                        title={isZenMode ? "Exit zen mode (Esc)" : "Enter zen mode"}
+                    >
+                        {isZenMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                    </button>
+                )}
+
+                {/* File title */}
+                <span className="text-[11px] font-semibold text-gray-300 truncate max-w-[120px] flex-shrink-0 px-1" title={filePath}>
+                    {getFileName(filePath) || 'LaTeX'}{hasChanges ? ' *' : ''}
+                </span>
+
+                <ToolbarDivider />
+
+                {/* Outline toggle */}
                 <ToolbarButton onClick={() => setShowOutline(!showOutline)} title="Outline" active={showOutline}><PanelLeft size={14} /></ToolbarButton>
 
                 <ToolbarDivider />
@@ -1488,6 +1575,30 @@ const LatexViewer = ({
                     <span className="w-px h-3 bg-white/[0.06]" />
                     <span>{stats.words} <span className="text-gray-600">w</span></span>
                 </div>
+
+                <ToolbarDivider />
+
+                {/* Save button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); save(); }}
+                    disabled={!hasChanges || isSaving}
+                    className="p-1 rounded text-xs theme-hover disabled:opacity-30 flex-shrink-0"
+                    title="Save (Ctrl+S)"
+                >
+                    {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+                </button>
+
+                {/* Close button */}
+                {onClose && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="p-1 theme-hover rounded flex-shrink-0 text-gray-400 hover:text-red-400"
+                        title="Close pane"
+                    >
+                        <X size={14} />
+                    </button>
+                )}
             </div>
 
             {/* Main content */}
@@ -1707,7 +1818,8 @@ const LatexViewer = ({
 
 // Custom comparison to prevent reload on pane resize
 const arePropsEqual = (prevProps: any, nextProps: any) => {
-    return prevProps.nodeId === nextProps.nodeId;
+    return prevProps.nodeId === nextProps.nodeId
+        && prevProps.isZenMode === nextProps.isZenMode;
 };
 
 export default memo(LatexViewer, arePropsEqual);

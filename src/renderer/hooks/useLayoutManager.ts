@@ -1,32 +1,30 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { generateId, findNodePath } from '../components/utils';
-import { syncLayoutWithContentData, collectPaneIds } from '../components/LayoutNode';
+import { syncLayoutWithContentData, collectPaneIds, addPaneToLayout } from '../components/LayoutNode';
 
 interface UseLayoutManagerParams {
     trackActivity: (action: string, data?: any) => void;
+    openModeRef?: React.MutableRefObject<'pane' | 'tab'>;
 }
 
 export function getConversationStats(messages: any[]) {
     if (!messages || messages.length === 0) {
-        return { messageCount: 0, tokenCount: 0, models: new Set(), agents: new Set(), providers: new Set() };
+        return { messageCount: 0, inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() };
     }
     return messages.reduce((acc: any, msg: any) => {
-        if (msg.content) {
-            acc.tokenCount += Math.ceil(msg.content.length / 4);
-        }
-        if (msg.reasoningContent) {
-            acc.tokenCount += Math.ceil(msg.reasoningContent.length / 4);
-        }
+        acc.inputTokens += (msg.input_tokens || 0);
+        acc.outputTokens += (msg.output_tokens || 0);
+        if (msg.cost) acc.totalCost += msg.cost;
         if (msg.role !== 'user') {
             if (msg.model) acc.models.add(msg.model);
             if (msg.npc) acc.agents.add(msg.npc);
             if (msg.provider) acc.providers.add(msg.provider);
         }
         return acc;
-    }, { messageCount: messages.length, tokenCount: 0, models: new Set(), agents: new Set(), providers: new Set() });
+    }, { messageCount: messages.length, inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() });
 }
 
-export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
+export function useLayoutManager({ trackActivity, openModeRef }: UseLayoutManagerParams) {
     const [rootLayoutNode, setRootLayoutNode] = useState<any>(null);
     const [activeContentPaneId, setActiveContentPaneId] = useState<string | null>(null);
     const contentDataRef = useRef<Record<string, any>>({});
@@ -42,10 +40,75 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
     const closeContentPaneRef = useRef<((paneId: string, nodePath: string[]) => void) | null>(null);
     const updateContentPaneRef = useRef<((paneId: string, contentType: string, contentId: string, skipMessageLoad?: boolean) => void) | null>(null);
 
-    // Keep rootLayoutNodeRef in sync
+    // Keep refs in sync
+    const activeContentPaneIdRef = useRef(activeContentPaneId);
+    activeContentPaneIdRef.current = activeContentPaneId;
     useEffect(() => {
         rootLayoutNodeRef.current = rootLayoutNode;
     }, [rootLayoutNode]);
+
+    // Add content as tab on active pane (tab mode) or as new pane (pane mode)
+    const addPaneOrTab = useCallback((newPaneId: string) => {
+        if (openModeRef?.current === 'tab' && activeContentPaneIdRef.current) {
+            const activePaneData = contentDataRef.current[activeContentPaneIdRef.current];
+            const newPaneData = contentDataRef.current[newPaneId];
+            if (activePaneData && newPaneData) {
+                // Save current active pane content into its first tab if tabs not yet initialized
+                if (!activePaneData.tabs || activePaneData.tabs.length === 0) {
+                    activePaneData.tabs = [{
+                        id: `tab_${Date.now()}_0`,
+                        contentType: activePaneData.contentType,
+                        contentId: activePaneData.contentId,
+                        title: activePaneData.contentType,
+                        browserUrl: activePaneData.browserUrl,
+                        fileContent: activePaneData.fileContent,
+                        fileChanged: activePaneData.fileChanged,
+                        isUntitled: activePaneData.isUntitled,
+                    chatMessages: activePaneData.chatMessages,
+                    executionMode: activePaneData.executionMode,
+                    selectedJinx: activePaneData.selectedJinx,
+                    chatStats: activePaneData.chatStats,
+                    }];
+                }
+                // Add new content as a new tab, preserving all relevant properties
+                activePaneData.tabs.push({
+                    id: `tab_${Date.now()}_${activePaneData.tabs.length}`,
+                    contentType: newPaneData.contentType,
+                    contentId: newPaneData.contentId,
+                    title: newPaneData.contentType,
+                    browserUrl: newPaneData.browserUrl,
+                    fileContent: newPaneData.fileContent,
+                    fileChanged: newPaneData.fileChanged,
+                    isUntitled: newPaneData.isUntitled,
+                    chatMessages: newPaneData.chatMessages,
+                    executionMode: newPaneData.executionMode,
+                    selectedJinx: newPaneData.selectedJinx,
+                    chatStats: newPaneData.chatStats,
+                });
+                activePaneData.activeTabIndex = activePaneData.tabs.length - 1;
+                // Copy all relevant properties to the active pane
+                activePaneData.contentType = newPaneData.contentType;
+                activePaneData.contentId = newPaneData.contentId;
+                activePaneData.browserUrl = newPaneData.browserUrl;
+                activePaneData.fileContent = newPaneData.fileContent;
+                activePaneData.fileChanged = newPaneData.fileChanged;
+                activePaneData.isUntitled = newPaneData.isUntitled;
+                activePaneData.chatMessages = newPaneData.chatMessages;
+                activePaneData.executionMode = newPaneData.executionMode;
+                activePaneData.selectedJinx = newPaneData.selectedJinx;
+                activePaneData.chatStats = newPaneData.chatStats;
+                delete contentDataRef.current[newPaneId];
+                setRootLayoutNode((prev: any) => prev ? JSON.parse(JSON.stringify(prev)) : prev);
+                return activeContentPaneIdRef.current;
+            }
+        }
+        setRootLayoutNode((oldRoot: any) => {
+            if (!oldRoot) return { id: newPaneId, type: 'content' };
+            return addPaneToLayout(oldRoot, newPaneId);
+        });
+        setActiveContentPaneId(newPaneId);
+        return newPaneId;
+    }, []);
 
     // Update content pane with new content type and ID
     const updateContentPane = useCallback(async (paneId: string, newContentType: string, newContentId: string | null, skipMessageLoad = false) => {
@@ -81,7 +144,7 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
                 paneData.chatMessages = { messages: [], allMessages: [], displayedMessageCount: 20 };
             }
             if (paneData.executionMode === undefined) {
-                const savedMode = localStorage.getItem('npcStudioExecutionMode');
+                const savedMode = localStorage.getItem('incognideExecutionMode');
                 paneData.executionMode = savedMode ? JSON.parse(savedMode) : 'chat';
                 paneData.selectedJinx = null;
                 paneData.showJinxDropdown = false;
@@ -293,9 +356,24 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
         });
     }, [trackActivity]);
 
-    // Helper to find an empty pane (disabled)
+    // Helper to find an empty pane that can be reused
     const findEmptyPaneId = useCallback(() => {
-        return null;
+        const findEmpty = (node: any): string | null => {
+            if (!node) return null;
+            if (node.type === 'content') {
+                const data = contentDataRef.current[node.id];
+                if (!data || !data.contentType) return node.id;
+                return null;
+            }
+            if (node.type === 'split') {
+                for (const child of node.children) {
+                    const found = findEmpty(child);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        return findEmpty(rootLayoutNodeRef.current);
     }, []);
 
     // Create and add a new pane to the layout
@@ -319,6 +397,58 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
             return null;
         }
 
+        // Singleton pane types — only one instance allowed, refocus if exists
+        const singletonTypes = new Set([
+            'settings', 'npcteam', 'teammanagement', 'jinx', 'library', 'help',
+            'git', 'projectenv', 'diskusage', 'data-labeler', 'graph-viewer',
+            'browsergraph', 'datadash', 'photoviewer', 'scherzo',
+        ]);
+
+        // Check for existing pane to refocus instead of creating duplicate
+        for (const [paneId, data] of Object.entries(contentDataRef.current)) {
+            if (!data?.contentType) continue;
+            // Skip virtual tab panes (they have _tab_ in ID)
+            if (paneId.includes('_tab_')) continue;
+
+            // Singleton: match by contentType only
+            if (singletonTypes.has(contentType) && data.contentType === contentType) {
+                setActiveContentPaneId(paneId);
+                return paneId;
+            }
+
+            // Document/file types: match by contentType + contentId
+            if (finalContentId && data.contentType === contentType && data.contentId === finalContentId) {
+                setActiveContentPaneId(paneId);
+                return paneId;
+            }
+
+            // Also check tabs for matching content
+            if (data.tabs && Array.isArray(data.tabs)) {
+                const tabIndex = data.tabs.findIndex((tab: any) =>
+                    (singletonTypes.has(contentType) && tab.contentType === contentType) ||
+                    (finalContentId && tab.contentType === contentType && tab.contentId === finalContentId)
+                );
+                if (tabIndex >= 0) {
+                    // Switch to the matching tab
+                    data.activeTabIndex = tabIndex;
+                    const tab = data.tabs[tabIndex];
+                    data.contentType = tab.contentType;
+                    data.contentId = tab.contentId;
+                    data.fileContent = tab.fileContent;
+                    data.fileChanged = tab.fileChanged;
+                    data.isUntitled = tab.isUntitled;
+                    if (tab.contentType === 'browser') data.browserUrl = tab.browserUrl;
+                    if (tab.contentType === 'chat') {
+                        data.chatMessages = tab.chatMessages;
+                        data.executionMode = tab.executionMode;
+                    }
+                    setActiveContentPaneId(paneId);
+                    setRootLayoutNode((prev: any) => prev ? ({ ...prev }) : prev);
+                    return paneId;
+                }
+            }
+        }
+
         const newPaneId = generateId();
 
         contentDataRef.current[newPaneId] = {
@@ -327,78 +457,16 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
             ...extraProps
         };
 
-        setRootLayoutNode((oldRoot: any) => {
-            if (!oldRoot) {
-                return { id: newPaneId, type: 'content' };
-            }
+        const resultPaneId = addPaneOrTab(newPaneId);
 
-            const collectIds = (node: any): string[] => {
-                if (!node) return [];
-                if (node.type === 'content') return [node.id];
-                if (node.type === 'split') {
-                    return node.children.flatMap((child: any) => collectIds(child));
-                }
-                return [];
-            };
-
-            const existingPaneIds = collectIds(oldRoot);
-            const allPaneIds = [...existingPaneIds, newPaneId];
-            const totalPanes = allPaneIds.length;
-
-            const cols = Math.ceil(Math.sqrt(totalPanes));
-            const rows = Math.ceil(totalPanes / cols);
-
-            const buildGridLayout = (paneIds: string[], numRows: number, numCols: number): any => {
-                if (paneIds.length === 0) return null;
-                if (paneIds.length === 1) {
-                    return { id: paneIds[0], type: 'content' };
-                }
-
-                const rowNodes: any[] = [];
-                let paneIndex = 0;
-
-                for (let r = 0; r < numRows && paneIndex < paneIds.length; r++) {
-                    const panesInThisRow = Math.min(numCols, paneIds.length - paneIndex);
-                    const rowPaneIds = paneIds.slice(paneIndex, paneIndex + panesInThisRow);
-                    paneIndex += panesInThisRow;
-
-                    if (rowPaneIds.length === 1) {
-                        rowNodes.push({ id: rowPaneIds[0], type: 'content' });
-                    } else {
-                        rowNodes.push({
-                            id: generateId(),
-                            type: 'split',
-                            direction: 'horizontal',
-                            children: rowPaneIds.map(id => ({ id, type: 'content' })),
-                            sizes: new Array(rowPaneIds.length).fill(100 / rowPaneIds.length)
-                        });
-                    }
-                }
-
-                if (rowNodes.length === 1) {
-                    return rowNodes[0];
-                }
-
-                return {
-                    id: generateId(),
-                    type: 'split',
-                    direction: 'vertical',
-                    children: rowNodes,
-                    sizes: new Array(rowNodes.length).fill(100 / rowNodes.length)
-                };
-            };
-
-            return buildGridLayout(allPaneIds, rows, cols);
-        });
-
-        setActiveContentPaneId(newPaneId);
-
+        // In tab mode, content was merged into active pane (newPaneId deleted)
+        const targetId = resultPaneId || newPaneId;
         if (contentType === 'editor' || contentType === 'chat') {
-            updateContentPane(newPaneId, contentType, finalContentId);
+            updateContentPane(targetId, contentType, finalContentId);
         }
 
-        return newPaneId;
-    }, [updateContentPane]);
+        return targetId;
+    }, [updateContentPane, addPaneOrTab]);
 
     // Move a content pane (drag & drop)
     const moveContentPane = useCallback((draggedId: string, draggedPath: number[], targetPath: number[], dropSide: string) => {
@@ -408,6 +476,7 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
             let newRoot = JSON.parse(JSON.stringify(oldRoot));
 
             const findNodeByPath = (root: any, path: number[]) => {
+                if (!Array.isArray(path)) return null;
                 let node = root;
                 for (const idx of path) {
                     if (!node?.children?.[idx]) return null;
@@ -527,7 +596,6 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
         } else {
             if (Object.keys(contentDataRef.current).length > 0) {
                 contentDataRef.current = {};
-                setRootLayoutNode((prev: any) => ({ ...prev }));
             }
         }
     }, [rootLayoutNode]);
@@ -558,6 +626,7 @@ export function useLayoutManager({ trackActivity }: UseLayoutManagerParams) {
         closeContentPane,
         findEmptyPaneId,
         createAndAddPaneNodeToLayout,
+        addPaneOrTab,
         moveContentPane,
     };
 }

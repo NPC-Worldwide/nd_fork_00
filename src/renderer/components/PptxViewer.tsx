@@ -660,6 +660,9 @@ const PptxViewer = ({
   const [currentFontSize, setCurrentFontSize] = useState('24');
   const [selectedTool, setSelectedTool] = useState<'select' | 'text' | 'shape'>('select');
   const [selectedShapeColor, setSelectedShapeColor] = useState('#4285f4');
+  const [selectedShapeIdx, setSelectedShapeIdx] = useState<number | null>(null);
+  const [editingShapeIdx, setEditingShapeIdx] = useState<number | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; origCx: number; origCy: number; mode: 'move' | 'resize'; handle?: string } | null>(null);
 
   // Presentation mode
   const [isPresentationMode, setIsPresentationMode] = useState(false);
@@ -1382,6 +1385,121 @@ const PptxViewer = ({
     setShowShapePicker(false);
   }, [idx]);
 
+  // Update shape transform (position/size) in EMU
+  const updateShapeXfrm = useCallback((shapeIdx: number, updates: Partial<{ x: number; y: number; cx: number; cy: number }>) => {
+    setSlides(prev => {
+      const next = [...prev];
+      const s = { ...next[idx] };
+      const shapes = [...s.shapes];
+      const sh = { ...shapes[shapeIdx] };
+      sh.xfrm = { ...sh.xfrm, ...updates };
+      shapes[shapeIdx] = sh;
+      s.shapes = shapes;
+      next[idx] = s;
+      return next;
+    });
+    setHasChanges(true);
+  }, [idx]);
+
+  // Delete selected shape
+  const deleteSelectedShape = useCallback(() => {
+    if (selectedShapeIdx === null) return;
+    setSlides(prev => {
+      const next = [...prev];
+      const s = { ...next[idx] };
+      const shapes = [...s.shapes];
+      shapes.splice(selectedShapeIdx, 1);
+      s.shapes = shapes;
+      next[idx] = s;
+      return next;
+    });
+    setSelectedShapeIdx(null);
+    setEditingShapeIdx(null);
+    setHasChanges(true);
+  }, [idx, selectedShapeIdx]);
+
+  // Mouse move/up handlers for shape dragging/resizing — always attached
+  const selectedShapeIdxRef = useRef(selectedShapeIdx);
+  selectedShapeIdxRef.current = selectedShapeIdx;
+  const updateShapeXfrmRef = useRef(updateShapeXfrm);
+  updateShapeXfrmRef.current = updateShapeXfrm;
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current || selectedShapeIdxRef.current === null) return;
+      const { startX, startY, origX, origY, origCx, origCy, mode, handle } = dragRef.current;
+      const dx = (e.clientX - startX) / (zoom / 100);
+      const dy = (e.clientY - startY) / (zoom / 100);
+      const dxEmu = dx / pxPerEmu;
+      const dyEmu = dy / pxPerEmu;
+      const si = selectedShapeIdxRef.current;
+
+      if (mode === 'move') {
+        updateShapeXfrmRef.current(si, { x: Math.max(0, origX + dxEmu), y: Math.max(0, origY + dyEmu) });
+      } else if (mode === 'resize') {
+        const minSize = 100000; // ~10px min
+        if (handle === 'se') {
+          updateShapeXfrmRef.current(si, { cx: Math.max(minSize, origCx + dxEmu), cy: Math.max(minSize, origCy + dyEmu) });
+        } else if (handle === 'e') {
+          updateShapeXfrmRef.current(si, { cx: Math.max(minSize, origCx + dxEmu) });
+        } else if (handle === 's') {
+          updateShapeXfrmRef.current(si, { cy: Math.max(minSize, origCy + dyEmu) });
+        } else if (handle === 'sw') {
+          const newCx = Math.max(minSize, origCx - dxEmu);
+          updateShapeXfrmRef.current(si, { x: origX + origCx - newCx, cx: newCx, cy: Math.max(minSize, origCy + dyEmu) });
+        } else if (handle === 'ne') {
+          updateShapeXfrmRef.current(si, { cx: Math.max(minSize, origCx + dxEmu), cy: Math.max(minSize, origCy - dyEmu), y: origY + origCy - Math.max(minSize, origCy - dyEmu) });
+        } else if (handle === 'nw') {
+          const newCx = Math.max(minSize, origCx - dxEmu);
+          const newCy = Math.max(minSize, origCy - dyEmu);
+          updateShapeXfrmRef.current(si, { x: origX + origCx - newCx, y: origY + origCy - newCy, cx: newCx, cy: newCy });
+        } else if (handle === 'n') {
+          const newCy = Math.max(minSize, origCy - dyEmu);
+          updateShapeXfrmRef.current(si, { y: origY + origCy - newCy, cy: newCy });
+        } else if (handle === 'w') {
+          const newCx = Math.max(minSize, origCx - dxEmu);
+          updateShapeXfrmRef.current(si, { x: origX + origCx - newCx, cx: newCx });
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [zoom, pxPerEmu]);
+
+  // Clear selection on slide change
+  useEffect(() => {
+    setSelectedShapeIdx(null);
+    setEditingShapeIdx(null);
+  }, [idx]);
+
+  // Delete key handler for selected shapes
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (selectedShapeIdx !== null && editingShapeIdx === null && (e.key === 'Delete' || e.key === 'Backspace')) {
+        // Only delete if we're not editing text inside the shape
+        const active = document.activeElement;
+        if (active && (active as HTMLElement).contentEditable === 'true') return;
+        e.preventDefault();
+        deleteSelectedShape();
+      }
+      if (e.key === 'Escape') {
+        setSelectedShapeIdx(null);
+        setEditingShapeIdx(null);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [selectedShapeIdx, editingShapeIdx, deleteSelectedShape]);
+
   // Set slide background
   const setSlideBackground = useCallback((bg: string) => {
     setSlides(prev => {
@@ -1583,6 +1701,93 @@ const PptxViewer = ({
       ? (themeColors['lt1'] || '#ffffff')
       : (themeColors['dk1'] || themeColors['dk2'] || '#000000');
 
+    // Selection border + resize handles for a selected element
+    const renderSelectionOverlay = (si: number) => {
+      if (!editable || selectedShapeIdx !== si) return null;
+      const handleSize = 8;
+      const handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
+      const handlePositions: Record<string, React.CSSProperties> = {
+        nw: { top: -handleSize/2, left: -handleSize/2, cursor: 'nwse-resize' },
+        n:  { top: -handleSize/2, left: '50%', marginLeft: -handleSize/2, cursor: 'ns-resize' },
+        ne: { top: -handleSize/2, right: -handleSize/2, cursor: 'nesw-resize' },
+        w:  { top: '50%', left: -handleSize/2, marginTop: -handleSize/2, cursor: 'ew-resize' },
+        e:  { top: '50%', right: -handleSize/2, marginTop: -handleSize/2, cursor: 'ew-resize' },
+        sw: { bottom: -handleSize/2, left: -handleSize/2, cursor: 'nesw-resize' },
+        s:  { bottom: -handleSize/2, left: '50%', marginLeft: -handleSize/2, cursor: 'ns-resize' },
+        se: { bottom: -handleSize/2, right: -handleSize/2, cursor: 'nwse-resize' },
+      };
+      return (
+        <>
+          <div style={{ position: 'absolute', inset: -1, border: '2px solid #4285f4', pointerEvents: 'none', zIndex: 100 }} />
+          {handles.map(h => (
+            <div
+              key={h}
+              style={{
+                position: 'absolute',
+                width: handleSize,
+                height: handleSize,
+                backgroundColor: 'white',
+                border: '1px solid #4285f4',
+                zIndex: 101,
+                ...handlePositions[h],
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const shape = slide.shapes[si];
+                dragRef.current = {
+                  startX: e.clientX, startY: e.clientY,
+                  origX: shape.xfrm.x, origY: shape.xfrm.y,
+                  origCx: shape.xfrm.cx, origCy: shape.xfrm.cy,
+                  mode: 'resize', handle: h,
+                };
+                // Force re-render to attach mousemove/mouseup listeners
+                setSelectedShapeIdx(si);
+              }}
+            />
+          ))}
+        </>
+      );
+    };
+
+    // Wrapper for click-to-select, double-click-to-edit, drag-to-move
+    const wrapShape = (si: number, el: React.ReactNode, style: React.CSSProperties) => {
+      const isSelected = selectedShapeIdx === si;
+      const isEditing = editingShapeIdx === si;
+      return (
+        <div
+          key={si}
+          style={{ ...style, cursor: editable ? (isEditing ? 'text' : isSelected ? 'move' : 'pointer') : 'default', zIndex: isSelected && editable ? 50 : style.zIndex }}
+          onMouseDown={(e) => {
+            if (!editable) return;
+            // If editing text, don't start a drag
+            if (isEditing) return;
+            e.stopPropagation();
+            setSelectedShapeIdx(si);
+            setEditingShapeIdx(null);
+            const shape = slide.shapes[si];
+            dragRef.current = {
+              startX: e.clientX, startY: e.clientY,
+              origX: shape.xfrm.x, origY: shape.xfrm.y,
+              origCx: shape.xfrm.cx, origCy: shape.xfrm.cy,
+              mode: 'move',
+            };
+          }}
+          onDoubleClick={(e) => {
+            if (!editable) return;
+            e.stopPropagation();
+            if (slide.shapes[si].type === 'text') {
+              setEditingShapeIdx(si);
+              setSelectedShapeIdx(si);
+            }
+          }}
+        >
+          {el}
+          {renderSelectionOverlay(si)}
+        </div>
+      );
+    };
+
     return slide.shapes.map((shape, si) => {
       const style: React.CSSProperties = {
         position: 'absolute',
@@ -1594,9 +1799,10 @@ const PptxViewer = ({
       };
 
       if (shape.type === 'text') {
-        // Build text box styles
+        // Build text box styles (relative inside wrapper)
         const textBoxStyle: React.CSSProperties = {
-          ...style,
+          width: '100%',
+          height: '100%',
           padding: 4 * scale,
           boxSizing: 'border-box' as const,
         };
@@ -1608,25 +1814,24 @@ const PptxViewer = ({
           textBoxStyle.border = `${(shape.borderWidth || 1) * scale}px solid ${shape.borderColor || '#000000'}`;
         }
 
-        return (
-          <div key={si} style={textBoxStyle}>
+        const isEditing = editingShapeIdx === si;
+
+        const textEl = (
+          <div style={textBoxStyle}>
             {shape.paras?.map((p, pi) => {
               const paraStyle: React.CSSProperties = {
                 textAlign: p.align === 'ctr' ? 'center' : p.align === 'r' ? 'right' : p.align === 'just' ? 'justify' : 'left',
                 paddingLeft: p.level * 20 * scale,
                 outline: 'none',
                 minHeight: '1em',
-                color: defaultTextColor, // Use computed default based on background
-                fontSize: `${18 * scale}px`, // Default font size
-                fontFamily: 'Arial, sans-serif', // Default font
+                color: defaultTextColor,
+                fontSize: `${18 * scale}px`,
+                fontFamily: 'Arial, sans-serif',
               };
 
-              // Apply line spacing
               if (p.lineSpacing) {
                 paraStyle.lineHeight = `${p.lineSpacing}%`;
               }
-
-              // Apply paragraph spacing
               if (p.spaceBefore) {
                 paraStyle.marginTop = `${p.spaceBefore * scale}pt`;
               }
@@ -1637,24 +1842,26 @@ const PptxViewer = ({
               return (
                 <div
                   key={pi}
-                  contentEditable={editable}
+                  contentEditable={editable && isEditing}
                   suppressContentEditableWarning
                   style={paraStyle}
                   onBlur={editable ? (e) => updateParaHTML(si, pi, e.currentTarget.innerHTML) : undefined}
+                  onMouseDown={isEditing ? (e) => e.stopPropagation() : undefined}
                   dangerouslySetInnerHTML={{ __html: (p.bullet ? '<span style="margin-right:4px">•</span>' : '') + p.html }}
                 />
               );
             })}
           </div>
         );
+
+        return wrapShape(si, textEl, style);
       }
 
       if (shape.type === 'image' && shape.imgDataUrl) {
-        return (
-          <div key={si} style={style}>
-            <img src={shape.imgDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          </div>
+        const imgEl = (
+          <img src={shape.imgDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
         );
+        return wrapShape(si, imgEl, style);
       }
 
       if (shape.type === 'shape') {
@@ -1662,12 +1869,10 @@ const PptxViewer = ({
           width: '100%',
           height: '100%',
         };
-        // Only apply fill color if one is specified - don't use a default
         if (shape.fillColor) {
           shapeStyle.backgroundColor = shape.fillColor;
         }
 
-        // Apply shape-specific styling
         if (shape.shapeType === 'ellipse') {
           shapeStyle.borderRadius = '50%';
         } else if (shape.shapeType === 'roundRect') {
@@ -1695,12 +1900,13 @@ const PptxViewer = ({
           shapeStyle.marginTop = `${emuToPx(shape.xfrm.cy) * scale / 2}px`;
         }
 
-        return <div key={si} style={{ ...style, ...shapeStyle }} />;
+        const shapeEl = <div style={shapeStyle} />;
+        return wrapShape(si, shapeEl, style);
       }
 
       return null;
     });
-  }, [emuToPx, updateParaHTML, themeColors]);
+  }, [emuToPx, updateParaHTML, themeColors, selectedShapeIdx, editingShapeIdx, zoom, pxPerEmu]);
 
   // ═══════════════════════════════════════════════════════════════════
   // Studio Actions: Expose presentation methods for AI control
@@ -2280,6 +2486,13 @@ const PptxViewer = ({
                 transformOrigin: 'top left',
                 position: 'relative',
                 background: activeSlide.background || '#ffffff',
+              }}
+              onClick={(e) => {
+                // Click on canvas background deselects shape
+                if (e.target === e.currentTarget) {
+                  setSelectedShapeIdx(null);
+                  setEditingShapeIdx(null);
+                }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();

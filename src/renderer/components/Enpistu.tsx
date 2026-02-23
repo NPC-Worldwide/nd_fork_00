@@ -7,7 +7,7 @@ import {
     ListFilter, ArrowDown,X, Wrench, FileText, Code2, FileJson, Paperclip,
     Send, BarChart3,Minimize2,  Maximize2, MessageCircle, BrainCircuit, Star, Origami, ChevronDown, ChevronUp,
     Clock, FolderTree, Search, HardDrive, Brain, GitBranch, Activity, Tag, Sparkles, Code, BookOpen, User,
-    RefreshCw, RotateCcw, Check, KeyRound, Bot, Zap, HelpCircle, AlertCircle
+    RefreshCw, RotateCcw, Check, KeyRound, Bot, Zap, HelpCircle, AlertCircle, MoreVertical
 } from 'lucide-react';
 
 import { Icon } from 'lucide-react';
@@ -121,7 +121,7 @@ import { getFileName,
 import { BranchingUI, createBranchPoint } from './BranchingUI';
 import BranchOptionsModal, { BranchOptions } from './BranchOptionsModal';
 import BranchVisualizer from './BranchVisualizer';
-import { addPaneToLayout, collectPaneIds } from './LayoutNode';
+import { collectPaneIds } from './LayoutNode';
 // Note: Sidebar.tsx, ChatViewer.tsx are code fragments, not proper modules yet
 import PaneHeader from './PaneHeader';
 import { LayoutNode } from './LayoutNode';
@@ -268,6 +268,11 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     // Activity tracking for RNN predictions
     const { trackActivity } = useActivityTracker();
 
+    // Open mode (pane vs tab) - must be before useLayoutManager so the ref can be passed
+    const [openMode, setOpenMode] = useState<'pane' | 'tab'>(() => (localStorage.getItem('incognide_openMode') as 'pane' | 'tab') || 'pane');
+    const openModeRef = useRef(openMode);
+    openModeRef.current = openMode;
+
     // Layout manager from useLayoutManager hook
     const {
         rootLayoutNode, setRootLayoutNode, activeContentPaneId, setActiveContentPaneId,
@@ -276,8 +281,8 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         editedFileName, setEditedFileName, paneContextMenu, setPaneContextMenu,
         performSplitRef, closeContentPaneRef, updateContentPaneRef,
         updateContentPane, performSplit, closeContentPane,
-        findEmptyPaneId, createAndAddPaneNodeToLayout, moveContentPane,
-    } = useLayoutManager({ trackActivity });
+        findEmptyPaneId, createAndAddPaneNodeToLayout, addPaneOrTab, moveContentPane,
+    } = useLayoutManager({ trackActivity, openModeRef });
 
     const [isEditingPath, setIsEditingPath] = useState(false);
     const [editedPath, setEditedPath] = useState('');
@@ -382,10 +387,11 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         return saved !== null ? JSON.parse(saved) : false;
     });
     const [isInputMinimized, setIsInputMinimized] = useState(false);
-    const [showDateTime, setShowDateTime] = useState(() => {
-        const saved = localStorage.getItem('npcStudioShowDateTime');
-        return saved !== null ? JSON.parse(saved) : false;
+    const [clockMode, setClockMode] = useState<'analog' | 'digital' | 'digital-date'>(() => {
+        const saved = localStorage.getItem('incognideClockMode');
+        return (saved === 'analog' || saved === 'digital' || saved === 'digital-date') ? saved : 'digital';
     });
+    const [topBarMenuOpen, setTopBarMenuOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [showCronDaemonPanel, setShowCronDaemonPanel] = useState(false);
     const [showMemoryManager, setShowMemoryManager] = useState(false);
@@ -419,6 +425,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         topBarHeight, setTopBarHeight, bottomBarHeight, setBottomBarHeight,
         isResizingTopBar, setIsResizingTopBar, isResizingBottomBar, setIsResizingBottomBar,
         topBarCollapsed, setTopBarCollapsed,
+        bottomBarCollapsed, setBottomBarCollapsed,
         handleSidebarResize, handleInputResize,
     } = useSidebarResize();
 
@@ -643,9 +650,23 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         localSearch, setLocalSearch,
     } = useSearch();
     const searchInputRef = useRef(null);
-   
-    const LAST_ACTIVE_PATH_KEY = 'npcStudioLastPath';
-    const LAST_ACTIVE_CONVO_ID_KEY = 'npcStudioLastConvoId';
+    const topBarRef = useRef<HTMLDivElement>(null);
+    const [topBarWidth, setTopBarWidth] = useState(1000);
+
+    useEffect(() => {
+        const el = topBarRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                setTopBarWidth(entry.contentRect.width);
+            }
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const LAST_ACTIVE_PATH_KEY = 'incognideLastPath';
+    const LAST_ACTIVE_CONVO_ID_KEY = 'incognideLastConvoId';
 
     const [isInputExpanded, setIsInputExpanded] = useState(false);
 
@@ -703,6 +724,12 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     activeContentPaneIdRef.current = activeContentPaneId;
     const [editorContextMenuPos, setEditorContextMenuPos] = useState(null);
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+    const [lockedPanes, setLockedPanes] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem('incognide_lockedPanes');
+            return saved ? new Set(JSON.parse(saved)) : new Set();
+        } catch { return new Set(); }
+    });
 
     // Global keyboard shortcuts (must be after activeContentPaneId and contentDataRef are defined)
     useEffect(() => {
@@ -829,8 +856,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                     contentId: newBrowserId,
                     browserUrl: data.url
                 };
-                setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-                setActiveContentPaneId(newPaneId);
+                addPaneOrTab(newPaneId);
             }
         });
 
@@ -916,8 +942,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                         browserUrl: closedTab.browserUrl,
                         browserTitle: closedTab.browserTitle
                     };
-                    setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-                    setActiveContentPaneId(newPaneId);
+                    addPaneOrTab(newPaneId);
                 }
             }));
         }
@@ -1004,16 +1029,16 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
 
     // Load theme colors from localStorage on startup
     useEffect(() => {
-        const darkPrimary = localStorage.getItem('npcStudio_themeDarkPrimary');
-        const darkBg = localStorage.getItem('npcStudio_themeDarkBg');
-        const darkText = localStorage.getItem('npcStudio_themeDarkText');
-        const lightPrimary = localStorage.getItem('npcStudio_themeLightPrimary');
-        const lightBg = localStorage.getItem('npcStudio_themeLightBg');
-        const lightText = localStorage.getItem('npcStudio_themeLightText');
-        const darkMode = localStorage.getItem('npcStudio_darkMode');
-        const hueShift = localStorage.getItem('npcStudio_themeHueShift');
-        const saturation = localStorage.getItem('npcStudio_themeSaturation');
-        const brightness = localStorage.getItem('npcStudio_themeBrightness');
+        const darkPrimary = localStorage.getItem('incognide_themeDarkPrimary');
+        const darkBg = localStorage.getItem('incognide_themeDarkBg');
+        const darkText = localStorage.getItem('incognide_themeDarkText');
+        const lightPrimary = localStorage.getItem('incognide_themeLightPrimary');
+        const lightBg = localStorage.getItem('incognide_themeLightBg');
+        const lightText = localStorage.getItem('incognide_themeLightText');
+        const darkMode = localStorage.getItem('incognide_darkMode');
+        const hueShift = localStorage.getItem('incognide_themeHueShift');
+        const saturation = localStorage.getItem('incognide_themeSaturation');
+        const brightness = localStorage.getItem('incognide_themeBrightness');
 
         // Apply dark mode colors
         if (darkPrimary) document.documentElement.style.setProperty('--theme-primary-dark', darkPrimary);
@@ -1040,10 +1065,10 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         }
     }, []);
 
-    // Save showDateTime preference
+    // Save clock mode preference
     useEffect(() => {
-        localStorage.setItem('npcStudioShowDateTime', JSON.stringify(showDateTime));
-    }, [showDateTime]);
+        localStorage.setItem('incognideClockMode', clockMode);
+    }, [clockMode]);
 
     // Update clock every second
     useEffect(() => {
@@ -2090,14 +2115,13 @@ const handleRunScript = useCallback(async (scriptPath: string) => {
             terminalId: terminalPaneId
         };
 
-        // Add pane to layout using balanced grid
-        setRootLayoutNode((prev) => addPaneToLayout(prev, terminalPaneId));
+        addPaneOrTab(terminalPaneId);
 
         // Track this terminal for this script
         scriptTerminalMapRef.current.set(scriptPath, terminalPaneId);
+    } else {
+        setActiveContentPaneId(terminalPaneId);
     }
-
-    setActiveContentPaneId(terminalPaneId);
 
     // Wait for terminal to initialize (if new) then send the run command
     const delay = contentDataRef.current[terminalPaneId]?.terminalInitialized ? 50 : 500;
@@ -2650,7 +2674,15 @@ const renderFileEditor = useCallback(({ nodeId }) => {
             handleTextSelection={() => {}}
             handleEditorCopy={() => {}}
             handleEditorPaste={() => {}}
-            handleAddToChat={() => {}}
+            handleAddToChat={(selectedText: string) => {
+                // Get the active pane's file path for context
+                const paneData = contentDataRef.current[activeContentPaneId || ''];
+                const filePath = paneData?.contentId;
+                const fileName = filePath ? filePath.split('/').pop() : 'selection';
+                const ext = fileName?.split('.').pop() || '';
+                const citation = `\`\`\`${ext}\n// From ${fileName}\n${selectedText}\n\`\`\``;
+                setInput(prev => `${prev}${prev ? '\n\n' : ''}${citation}`);
+            }}
             handleAIEdit={handleAICodeAction}
             startAgenticEdit={() => {}}
             onGitBlame={() => {}}
@@ -2770,7 +2802,7 @@ const renderPptxViewer = useCallback(({ nodeId }) => {
     );
 }, [rootLayoutNode, closeContentPane]);
 
-const renderLatexViewer = useCallback(({ nodeId }) => {
+const renderLatexViewer = useCallback(({ nodeId, onToggleZen, isZenMode, onClose }) => {
     return (
         <LatexViewer
             nodeId={nodeId}
@@ -2781,6 +2813,9 @@ const renderLatexViewer = useCallback(({ nodeId }) => {
             setPaneContextMenu={setPaneContextMenu}
             closeContentPane={closeContentPane}
             performSplit={performSplit}
+            onToggleZen={onToggleZen}
+            isZenMode={isZenMode}
+            onClose={onClose}
         />
     );
 }, [rootLayoutNode, closeContentPane, performSplit]);
@@ -2970,15 +3005,15 @@ const handleOpenDocumentFromLibrary = useCallback(async (path: string, type: 'pd
         contentId: path
     };
 
-    // Use balanced grid layout
-    setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
+    addPaneOrTab(newPaneId);
 
+    const targetPaneId = contentDataRef.current[newPaneId] ? newPaneId : activeContentPaneIdRef.current;
     setTimeout(async () => {
-        await updateContentPane(newPaneId, type, path);
-        setRootLayoutNode(prev => ({ ...prev }));
+        if (targetPaneId) {
+            await updateContentPane(targetPaneId, type, path);
+            setRootLayoutNode(prev => ({ ...prev }));
+        }
     }, 0);
-
-    setActiveContentPaneId(newPaneId);
 }, [updateContentPane]);
 
 // Render LibraryViewer pane (for pane-based viewing)
@@ -3538,143 +3573,108 @@ const renderMessageContextMenu = () => null;
         // Set content data with contentType BEFORE layout update to prevent sync removal
         contentDataRef.current[newPaneId] = { shellType, contentType: 'terminal', contentId: newTerminalId };
 
-        // Use balanced grid layout
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
+        addPaneOrTab(newPaneId);
 
-        // Then update content (shellType is already in paneData from above)
+        // In tab mode, newPaneId was merged into active pane; resolve target for async update
+        const targetPaneId = contentDataRef.current[newPaneId] ? newPaneId : activeContentPaneIdRef.current;
         setTimeout(async () => {
-            await updateContentPane(newPaneId, 'terminal', newTerminalId);
-            setRootLayoutNode(prev => ({ ...prev }));
+            if (targetPaneId) {
+                await updateContentPane(targetPaneId, 'terminal', newTerminalId);
+                setRootLayoutNode(prev => ({ ...prev }));
+            }
         }, 0);
 
-        setActiveContentPaneId(newPaneId);
         setActiveConversationId(null);
         setCurrentFile(null);
     }, [updateContentPane, findEmptyPaneId]);
 
     // Create a new experiment (.exp)
     const createNewExperiment = useCallback(async () => {
-        // Create a new untitled experiment in the current directory
-        const timestamp = Date.now();
-        const notebookName = `experiment-${timestamp}.exp`;
-        const notebookPath = `${currentPath}/${notebookName}`;
-
-        // Create empty experiment structure with scientific method sections
-        const emptyExp = {
-            exp_version: '1.0',
-            created_at: new Date().toISOString(),
-            modified_at: new Date().toISOString(),
-            hypothesis: '',
-            sections: [
-                { id: 'hypothesis', type: 'hypothesis', title: 'Hypothesis', order: 0, blocks: [] },
-                { id: 'methods', type: 'methods', title: 'Methods', order: 1, blocks: [] },
-                { id: 'data', type: 'data', title: 'Data', order: 2, blocks: [] },
-                { id: 'results', type: 'results', title: 'Results', order: 3, blocks: [] },
-                { id: 'discussion', type: 'discussion', title: 'Discussion', order: 4, blocks: [] },
-                { id: 'conclusion', type: 'conclusion', title: 'Conclusion', order: 5, blocks: [] },
-            ],
-            status: 'draft',
-            conclusion: null,
-            tags: [],
-            session_ids: [],
-            notes: [],
-            artifacts: []
-        };
-
         try {
-            await (window as any).api.writeFileContent(notebookPath, JSON.stringify(emptyExp, null, 2));
-
-            // Check for empty pane to reuse first
-            const emptyPaneId = findEmptyPaneId();
-            if (emptyPaneId) {
-                await updateContentPane(emptyPaneId, 'exp', notebookPath);
-                setActiveContentPaneId(emptyPaneId);
-                setRootLayoutNode(prev => ({ ...prev }));
-                return;
-            }
-
-            const newPaneId = generateId();
-
-            // Set content BEFORE layout to prevent empty pane
-            contentDataRef.current[newPaneId] = { contentType: 'exp', contentId: notebookPath };
-
-            // Use balanced grid layout
-            setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-
-            setActiveContentPaneId(newPaneId);
-            setActiveConversationId(null);
-            setCurrentFile(notebookPath);
+            const npcshHome = await window.api.getNpcshHome?.() || `${await window.api.getHomeDir?.() || '~'}/.npcsh`;
+            const tmpDir = normalizePath(`${npcshHome}/incognide/tmp`);
+            await window.api.ensureDir?.(tmpDir).catch(() => {});
+            const filepath = normalizePath(`${tmpDir}/experiment-${Date.now()}.exp`);
+            const emptyExp = {
+                exp_version: '1.0', created_at: new Date().toISOString(), modified_at: new Date().toISOString(),
+                hypothesis: '', status: 'draft', conclusion: null, tags: [], session_ids: [], notes: [], artifacts: [],
+                sections: [
+                    { id: 'hypothesis', type: 'hypothesis', title: 'Hypothesis', order: 0, blocks: [] },
+                    { id: 'methods', type: 'methods', title: 'Methods', order: 1, blocks: [] },
+                    { id: 'data', type: 'data', title: 'Data', order: 2, blocks: [] },
+                    { id: 'results', type: 'results', title: 'Results', order: 3, blocks: [] },
+                    { id: 'discussion', type: 'discussion', title: 'Discussion', order: 4, blocks: [] },
+                    { id: 'conclusion', type: 'conclusion', title: 'Conclusion', order: 5, blocks: [] },
+                ],
+            };
+            await (window as any).api.writeFileContent(filepath, JSON.stringify(emptyExp, null, 2));
+            createAndAddPaneNodeToLayout({ contentType: 'exp', contentId: filepath, isUntitled: true });
         } catch (err: any) {
-            setError(`Failed to create notebook: ${err.message}`);
+            setError(err.message);
         }
-    }, [currentPath, updateContentPane, findEmptyPaneId]);
+    }, [createAndAddPaneNodeToLayout]);
 
     // Create DataLabeler pane
     const createDataLabelerPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'data-labeler', contentId: 'data-labeler' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create GraphViewer pane
     const createGraphViewerPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'graph-viewer', contentId: 'graph-viewer' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create MemoryManager pane
     const createMemoryManagerPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'memory-manager', contentId: 'memory-manager' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create CronDaemon pane
     const createCronDaemonPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'cron-daemon', contentId: 'cron-daemon' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create Search pane
     const createSearchPane = useCallback(async (initialQuery?: string) => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'search', contentId: 'search', initialQuery: initialQuery || '' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create BrowserHistoryWeb pane (browser navigation graph)
     const createBrowserGraphPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'browsergraph', contentId: 'browsergraph' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create DataDash pane
     const createDataDashPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'datadash', contentId: 'datadash' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create DBTool pane
     const createDBToolPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'dbtool', contentId: 'dbtool' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
+        addPaneOrTab(newPaneId);
+        const targetPaneId = contentDataRef.current[newPaneId] ? newPaneId : activeContentPaneIdRef.current;
         setTimeout(async () => {
-            await updateContentPane(newPaneId, 'dbtool', 'dbtool');
-            setRootLayoutNode(prev => ({ ...prev }));
+            if (targetPaneId) {
+                await updateContentPane(targetPaneId, 'dbtool', 'dbtool');
+                setRootLayoutNode(prev => ({ ...prev }));
+            }
         }, 0);
-        setActiveContentPaneId(newPaneId);
     }, [updateContentPane]);
 
     // Create Tile Jinx pane - loads and runs a jinx file at runtime
@@ -3685,56 +3685,49 @@ const renderMessageContextMenu = () => null;
             contentId: jinxFile,
             jinxFile: jinxFile,
         };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create PhotoViewer pane
     const createPhotoViewerPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'photoviewer', contentId: 'photoviewer' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create Scherzo (audio studio) pane
     const createScherzoPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'scherzo', contentId: 'scherzo' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create LibraryViewer pane
     const createLibraryViewerPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'library', contentId: 'library' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create ProjectEnv pane
     const createProjectEnvPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'projectenv', contentId: 'projectenv' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create DiskUsage pane
     const createDiskUsagePane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'diskusage', contentId: 'diskusage' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create Help pane
     const createHelpPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'help', contentId: 'help' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     const handleGlobalDragStart = useCallback((e, item) => {
@@ -3808,9 +3801,7 @@ const handleGlobalDragEnd = () => {
     contentDataRef.current[newPaneId] = { contentType: 'browser', contentId: newBrowserId, browserUrl: targetUrl };
 
     // Use balanced grid layout
-    setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-
-    setActiveContentPaneId(newPaneId);
+    addPaneOrTab(newPaneId);
     setActiveConversationId(null);
     setCurrentFile(null);
 }, [currentPath, updateContentPane, findEmptyPaneId]);
@@ -3976,61 +3967,22 @@ const handleBrowserDialogNavigate = (url) => {
 
     // Create a new Jupyter notebook (.ipynb)
     const createNewJupyterNotebook = useCallback(async () => {
-        const timestamp = Date.now();
-        const notebookName = `notebook-${timestamp}.ipynb`;
-        const notebookPath = `${currentPath}/${notebookName}`;
-
-        // Create empty Jupyter notebook structure
-        const emptyNotebook = {
-            nbformat: 4,
-            nbformat_minor: 5,
-            metadata: {
-                kernelspec: {
-                    display_name: 'Python 3',
-                    language: 'python',
-                    name: 'python3'
-                },
-                language_info: {
-                    name: 'python',
-                    version: '3.9.0'
-                }
-            },
-            cells: [
-                {
-                    cell_type: 'code',
-                    execution_count: null,
-                    metadata: {},
-                    outputs: [],
-                    source: ['']
-                }
-            ]
-        };
-
         try {
-            await (window as any).api.writeFileContent(notebookPath, JSON.stringify(emptyNotebook, null, 2));
-
-            // Check for empty pane to reuse first
-            const emptyPaneId = findEmptyPaneId();
-            if (emptyPaneId) {
-                await updateContentPane(emptyPaneId, 'notebook', notebookPath);
-                setActiveContentPaneId(emptyPaneId);
-                setRootLayoutNode(prev => ({ ...prev }));
-                loadDirectoryStructure(currentPath);
-                return;
-            }
-
-            const newPaneId = generateId();
-            contentDataRef.current[newPaneId] = { contentType: 'notebook', contentId: notebookPath };
-            setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-            setActiveContentPaneId(newPaneId);
-            setActiveConversationId(null);
-            setCurrentFile(null);
-            loadDirectoryStructure(currentPath);
+            const npcshHome = await window.api.getNpcshHome?.() || `${await window.api.getHomeDir?.() || '~'}/.npcsh`;
+            const tmpDir = normalizePath(`${npcshHome}/incognide/tmp`);
+            await window.api.ensureDir?.(tmpDir).catch(() => {});
+            const filepath = normalizePath(`${tmpDir}/notebook-${Date.now()}.ipynb`);
+            const emptyNotebook = {
+                nbformat: 4, nbformat_minor: 5,
+                metadata: { kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' }, language_info: { name: 'python', version: '3.9.0' } },
+                cells: [{ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: [''] }]
+            };
+            await (window as any).api.writeFileContent(filepath, JSON.stringify(emptyNotebook, null, 2));
+            createAndAddPaneNodeToLayout({ contentType: 'notebook', contentId: filepath, isUntitled: true });
         } catch (err: any) {
-            console.error('Error creating notebook:', err);
             setError(err.message);
         }
-    }, [currentPath, updateContentPane, findEmptyPaneId]);
+    }, [createAndAddPaneNodeToLayout]);
 
     // File drag and drop handler
     const handleDrop = async (e: React.DragEvent) => {
@@ -4155,9 +4107,10 @@ const handleBrowserDialogNavigate = (url) => {
     };
 
     // Main input submit handler
-    const handleInputSubmit = async (e: React.FormEvent, options?: { voiceInput?: boolean; genParams?: { temperature: number; top_p: number; top_k: number; max_tokens: number } }) => {
+    const handleInputSubmit = async (e: React.FormEvent, options?: { voiceInput?: boolean; disableThinking?: boolean; genParams?: { temperature: number; top_p: number; top_k: number; max_tokens: number } }) => {
         e.preventDefault();
         const wasVoiceInput = options?.voiceInput || false;
+        const disableThinking = options?.disableThinking || false;
         const genParams = options?.genParams || { temperature: 0.7, top_p: 0.9, top_k: 40, max_tokens: 4096 };
 
         // Get pane-specific execution mode and selectedJinx
@@ -4415,6 +4368,7 @@ ${contextPrompt}`;
                         top_p: genParams.top_p,
                         top_k: genParams.top_k,
                         max_tokens: genParams.max_tokens,
+                        disableThinking,
                     };
                     await window.api.executeCommandStream(commandData);
                 }
@@ -4777,9 +4731,7 @@ ${contextPrompt}`;
             };
 
             // Update the layout with the new pane using balanced grid
-            setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-
-            setActiveContentPaneId(newPaneId);
+            addPaneOrTab(newPaneId);
             setActiveConversationId(conversation.id);
             setCurrentFile(null);
 
@@ -4820,8 +4772,7 @@ ${contextPrompt}`;
     const createNPCTeamPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'npcteam', contentId: 'npcteam' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Render Jinx Menu pane (embedded version for pane layout)
@@ -4840,8 +4791,7 @@ ${contextPrompt}`;
     const createJinxPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'jinx', contentId: 'jinx' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Render Team Management pane (embedded version for pane layout)
@@ -4864,8 +4814,7 @@ ${contextPrompt}`;
     const createTeamManagementPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'teammanagement', contentId: 'teammanagement' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Render Settings pane (embedded version for pane layout)
@@ -4887,8 +4836,7 @@ ${contextPrompt}`;
     const createSettingsPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'settings', contentId: 'settings' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Keep menu handler refs updated
@@ -4902,8 +4850,7 @@ ${contextPrompt}`;
     const createGitPane = useCallback(async () => {
         const newPaneId = generateId();
         contentDataRef.current[newPaneId] = { contentType: 'git', contentId: 'git' };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     // Create untitled text file directly without modal
@@ -4915,12 +4862,11 @@ ${contextPrompt}`;
             fileContent: '',
             isUntitled: true
         };
-        setRootLayoutNode(oldRoot => addPaneToLayout(oldRoot, newPaneId));
-        setActiveContentPaneId(newPaneId);
+        addPaneOrTab(newPaneId);
     }, []);
 
     const createNewTextFile = useCallback((defaultFilename?: string) => {
-        const filename = defaultFilename || localStorage.getItem('npcStudio_defaultCodeFileType') || 'untitled.py';
+        const filename = defaultFilename || localStorage.getItem('incognide_defaultCodeFileType') || 'untitled.py';
         const finalDefault = filename.includes('.') ? filename : `untitled.${filename}`;
         setPromptModalValue(finalDefault);
         setPromptModal({
@@ -4960,24 +4906,57 @@ ${contextPrompt}`;
         return () => window.removeEventListener('createNewFileWithName', handleCreateNewFileWithName as EventListener);
     }, [createNewTextFile]);
 
+    // Listen for terminal clickable file:line paths
+    useEffect(() => {
+        const handleTerminalOpenFile = (e: CustomEvent<{ filePath: string; line: number; col: number; currentPath: string }>) => {
+            const { filePath, line, col, currentPath: termCwd } = e.detail;
+            // Resolve relative paths against terminal's cwd
+            const fullPath = filePath.startsWith('/')
+                ? filePath
+                : `${termCwd || currentPath}/${filePath}`;
+            const normalized = normalizePath(fullPath);
+            // Check if file is already open
+            const existingPaneId = Object.keys(contentDataRef.current).find(
+                id => contentDataRef.current[id]?.contentType === 'editor' && contentDataRef.current[id]?.contentId === normalized
+            );
+            if (existingPaneId) {
+                setActiveContentPaneId(existingPaneId);
+            } else {
+                createAndAddPaneNodeToLayout({ contentType: 'editor', contentId: normalized });
+            }
+        };
+        window.addEventListener('terminal-open-file', handleTerminalOpenFile as EventListener);
+        return () => window.removeEventListener('terminal-open-file', handleTerminalOpenFile as EventListener);
+    }, [currentPath, createAndAddPaneNodeToLayout, setActiveContentPaneId]);
+
     const createNewDocument = async (docType: 'docx' | 'xlsx' | 'pptx' | 'mapx') => {
         try {
             const ext = docType === 'mapx' ? 'mapx' : docType;
+            const contentType = ext === 'xlsx' ? 'csv' : ext === 'mapx' ? 'mindmap' : ext;
             const filename = `untitled-${Date.now()}.${ext}`;
-            const filepath = normalizePath(`${currentPath}/${filename}`);
-            // Create empty document - the viewer components will handle creating proper structure
-            // For mindmap (.mapx), create initial JSON structure
+            // Use a temp dir so user's directories stay clean
+            const npcshHome = await window.api.getNpcshHome?.() || `${await window.api.getHomeDir?.() || '~'}/.npcsh`;
+            const tmpDir = normalizePath(`${npcshHome}/incognide/tmp`);
+            await window.api.ensureDir?.(tmpDir).catch(() => {});
+            // Clean up old temp files before creating new one
+            try {
+                const existing = await window.api.readDirectory?.(tmpDir);
+                if (Array.isArray(existing)) {
+                    for (const f of existing) {
+                        if (f.name?.startsWith('untitled-')) {
+                            await window.api.deleteFile?.(f.path || normalizePath(`${tmpDir}/${f.name}`)).catch(() => {});
+                        }
+                    }
+                }
+            } catch {}
+            const filepath = normalizePath(`${tmpDir}/${filename}`);
             if (docType === 'mapx') {
-                const initialMindMap = {
-                    nodes: [{ id: 'root', label: 'Central Idea', x: 400, y: 300, color: '#3b82f6' }],
-                    links: []
-                };
+                const initialMindMap = { nodes: [{ id: 'root', label: 'Central Idea', x: 400, y: 300, color: '#3b82f6' }], links: [] };
                 await window.api.writeFileContent(filepath, JSON.stringify(initialMindMap, null, 2));
             } else {
                 await window.api.writeFileContent(filepath, '');
             }
-            await loadDirectoryStructure(currentPath);
-            await handleFileClick(filepath);
+            createAndAddPaneNodeToLayout({ contentType, contentId: filepath, isUntitled: true });
         } catch (err) {
             setError(err.message);
         }
@@ -5414,8 +5393,8 @@ ${contextPrompt}`;
                 providerToSet = projectModelExists.provider;
             } else {
                 // Project model not found - try saved localStorage model
-                const savedModel = localStorage.getItem('npcStudioCurrentModel');
-                const savedProvider = localStorage.getItem('npcStudioCurrentProvider');
+                const savedModel = localStorage.getItem('incognideCurrentModel');
+                const savedProvider = localStorage.getItem('incognideCurrentProvider');
                 if (savedModel) {
                     const parsedSavedModel = JSON.parse(savedModel);
                     const savedModelExists = fetchedModels.find(m => m.value === parsedSavedModel);
@@ -5484,7 +5463,7 @@ ${contextPrompt}`;
             if (!fetchedModels.some(m => m.value === modelToSet) && fetchedModels.length > 0) {
                 // Config model not found - try favorites first, then fall back to a reasonable default
                 // Load favorites from localStorage (since state might be stale in closure)
-                const savedFavorites = localStorage.getItem('npcStudioFavoriteModels');
+                const savedFavorites = localStorage.getItem('incognideFavoriteModels');
                 const favModels = savedFavorites ? new Set(JSON.parse(savedFavorites)) : new Set();
 
                 // Find first favorite that exists in available models
@@ -6938,9 +6917,12 @@ const layoutComponentApi = useMemo(() => ({
     handleNewBrowserTab,
     // Top bar collapse for expand button in pane header
     topBarCollapsed,
-    onExpandTopBar: () => { setTopBarCollapsed(false); localStorage.setItem('npcStudio_topBarCollapsed', 'false'); },
+    onExpandTopBar: () => { setTopBarCollapsed(false); localStorage.setItem('incognide_topBarCollapsed', 'false'); },
     // Current working directory
     currentPath,
+    // Pane locking (per-pane)
+    lockedPanes,
+    togglePaneLocked: (nodeId: string) => { setLockedPanes(prev => { const next = new Set(prev); if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId); localStorage.setItem('incognide_lockedPanes', JSON.stringify([...next])); return next; }); },
 }), [
     rootLayoutNode,
     findNodeByPath, findNodePath, activeContentPaneId,
@@ -6956,7 +6938,7 @@ const layoutComponentApi = useMemo(() => ({
     zenModePaneId,
     renamingPaneId, editedFileName, handleConfirmRename,
     handleRunScript, handleNewBrowserTab, topBarCollapsed,
-    currentPath,
+    currentPath, lockedPanes,
 ]);
 
 // Handle conversation selection - opens conversation in a pane
@@ -7136,6 +7118,18 @@ const renderPaneContextMenu = () => {
         setPaneContextMenu(null);
     };
 
+    const handleRenamePane = () => {
+        const paneData = contentDataRef.current[nodeId];
+        if (paneData?.contentId) {
+            setRenamingPaneId(nodeId);
+            setEditedFileName(paneData.contentId.split('/').pop() || '');
+        }
+        setPaneContextMenu(null);
+    };
+
+    const paneData = contentDataRef.current[nodeId];
+    const hasFile = paneData?.contentId && typeof paneData.contentId === 'string' && paneData.contentId.includes('/');
+
     return (
         <>
             <div className="fixed inset-0 z-40" onClick={() => setPaneContextMenu(null)} />
@@ -7147,6 +7141,13 @@ const renderPaneContextMenu = () => {
                 <button onClick={closePane} className="block px-4 py-2 w-full text-left theme-hover text-red-400">
                     Close Pane
                 </button>
+
+                {/* Rename option for file-based panes */}
+                {hasFile && (
+                    <button onClick={handleRenamePane} className="flex items-center gap-2 px-4 py-2 w-full text-left theme-hover">
+                        <Edit size={14} className="text-gray-400" /> Rename
+                    </button>
+                )}
 
                 <div className="border-t theme-border my-1" />
 
@@ -7492,9 +7493,17 @@ const renderAttachmentThumbnails = () => {
 const renderMainContent = () => {
 
     // Top bar component - collapsible, resizable
-    const topBar = topBarCollapsed ? null : (
+    const topBar = topBarCollapsed ? (
+        <div
+            className="h-1 hover:h-4 flex items-center justify-center cursor-pointer theme-bg-secondary border-b theme-border transition-all group flex-shrink-0"
+            onClick={() => { setTopBarCollapsed(false); localStorage.setItem('incognide_topBarCollapsed', 'false'); }}
+            title="Show top bar"
+        >
+            <ChevronDown size={10} className="opacity-0 group-hover:opacity-60" />
+        </div>
+    ) : (
         <div className="flex-shrink-0 relative" style={{ height: topBarHeight }}>
-            <div className="h-full px-3 flex items-center gap-3 text-[12px] theme-bg-secondary border-b theme-border">
+            <div ref={topBarRef} className="h-full px-3 flex items-center gap-3 text-[12px] theme-bg-secondary border-b theme-border">
             {/* Settings - left of path */}
             <button
                 data-tutorial="settings-button"
@@ -7527,11 +7536,32 @@ const renderMainContent = () => {
 
             <div className="flex-1" />
 
-            {/* App Search */}
+            {/* Collapse top bar */}
+            <button
+                onClick={() => { setTopBarCollapsed(true); localStorage.setItem('incognide_topBarCollapsed', 'true'); }}
+                className="p-1.5 theme-hover rounded theme-text-muted"
+                title="Hide top bar"
+            >
+                <ChevronUp size={14} />
+            </button>
+
+            {/* App Search — collapses to icon button when top bar is narrow */}
+            {topBarWidth < 900 ? (
+                <button
+                    data-tutorial="search-bar"
+                    onClick={() => {
+                        const q = window.prompt('Search files:');
+                        if (q?.trim()) createSearchPane(q.trim());
+                    }}
+                    className="p-1.5 theme-hover rounded theme-text-muted"
+                    title="Search files"
+                >
+                    <Search size={16} className="text-blue-400" />
+                </button>
+            ) : (
             <div
                 data-tutorial="search-bar"
-                className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-gray-600 rounded focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400/30 transition-all"
-                style={{ width: Math.max(100, topBarHeight * 4) }}
+                className="flex items-center gap-2 w-40 px-2 py-1 bg-black/40 border border-gray-600 rounded focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400/30 transition-all"
             >
                 {/* Custom app search icon - magnifying glass with document */}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 flex-shrink-0">
@@ -7584,8 +7614,26 @@ const renderMainContent = () => {
                     </button>
                 )}
             </div>
+            )}
 
-            {/* Web Search */}
+            {/* Web Search — collapses to icon button when top bar is narrow */}
+            {topBarWidth < 900 ? (
+                <button
+                    data-tutorial="web-search-bar"
+                    onClick={() => {
+                        const q = window.prompt('Web search:');
+                        if (q?.trim()) {
+                            const provider = WEB_SEARCH_PROVIDERS[webSearchProvider];
+                            const url = provider.url + encodeURIComponent(q.trim());
+                            createNewBrowser(url);
+                        }
+                    }}
+                    className="p-1.5 theme-hover rounded theme-text-muted"
+                    title="Web search"
+                >
+                    <Globe size={16} className="text-cyan-400" />
+                </button>
+            ) : (
             <div data-tutorial="web-search-bar" className="flex items-center gap-2 w-40 px-2 py-1 bg-black/40 border border-gray-600 rounded focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400/30 transition-all">
                 <Globe size={14} className="text-cyan-400 flex-shrink-0" />
                 <input
@@ -7604,72 +7652,80 @@ const renderMainContent = () => {
                     className="flex-1 bg-transparent text-gray-100 text-xs focus:outline-none min-w-0"
                 />
             </div>
+            )}
 
             <div className="flex-1" />
 
-            {/* Right side - Library, Photo, Disk Usage, Cron/Daemon, DateTime */}
+            {/* Right side - Library, Photo, Disk Usage, Cron/Daemon, Clock */}
             <div className="flex items-center gap-2">
-                <button
-                    onClick={() => createLibraryViewerPane?.()}
-                    className="p-2 theme-hover rounded theme-text-muted"
-                    title="Library"
-                >
-                    <BookOpen size={18} />
-                </button>
-                <button
-                    onClick={() => createPhotoViewerPane?.()}
-                    className="p-2 theme-hover rounded theme-text-muted"
-                    title="Vixynt"
-                    data-tutorial="vixynt-button"
-                >
-                    <Image size={18} />
-                </button>
-                <button
-                    onClick={() => createScherzoPane?.()}
-                    className="p-2 theme-hover rounded theme-text-muted"
-                    title="Scherzo"
-                    data-tutorial="scherzo-button"
-                >
-                    <Music size={18} />
-                </button>
-                <button
-                    onClick={() => createDiskUsagePane?.()}
-                    className="p-2 theme-hover rounded theme-text-muted"
-                    title="Disk Usage Analyzer"
-                    data-tutorial="disk-usage-button"
-                >
-                    <HardDrive size={18} />
-                </button>
-                <button
-                    onClick={() => createCronDaemonPane()}
-                    className="p-2 theme-hover rounded theme-text-muted"
-                    title="Assembly Line (Cron, Daemons, SQL Models)"
-                    data-tutorial="cron-button"
-                >
-                    {/* Smokestack / Factory icon */}
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {/* Main smokestack */}
-                        <rect x="5" y="10" width="5" height="12" rx="0.5" />
-                        {/* Smoke puffs rising */}
-                        <circle cx="7.5" cy="6" r="2" />
-                        <circle cx="9" cy="3" r="1.5" />
-                        {/* Second stack */}
-                        <rect x="12" y="14" width="4" height="8" rx="0.5" />
-                        {/* Third smaller stack */}
-                        <rect x="18" y="16" width="3" height="6" rx="0.5" />
-                        {/* Ground line */}
-                        <path d="M2 22h20" />
-                    </svg>
-                </button>
+                {topBarWidth >= 650 ? (
+                    <>
+                        <button onClick={() => createLibraryViewerPane?.()} className="p-2 theme-hover rounded theme-text-muted" title="Library"><BookOpen size={18} /></button>
+                        <button onClick={() => createPhotoViewerPane?.()} className="p-2 theme-hover rounded theme-text-muted" title="Vixynt" data-tutorial="vixynt-button"><Image size={18} /></button>
+                        <button onClick={() => createScherzoPane?.()} className="p-2 theme-hover rounded theme-text-muted" title="Scherzo" data-tutorial="scherzo-button"><Music size={18} /></button>
+                        <button onClick={() => createDiskUsagePane?.()} className="p-2 theme-hover rounded theme-text-muted" title="Disk Usage Analyzer" data-tutorial="disk-usage-button"><HardDrive size={18} /></button>
+                        <button onClick={() => createCronDaemonPane()} className="p-2 theme-hover rounded theme-text-muted" title="Assembly Line (Cron, Daemons, SQL Models)" data-tutorial="cron-button">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="5" y="10" width="5" height="12" rx="0.5" />
+                                <circle cx="7.5" cy="6" r="2" /><circle cx="9" cy="3" r="1.5" />
+                                <rect x="12" y="14" width="4" height="8" rx="0.5" />
+                                <rect x="18" y="16" width="3" height="6" rx="0.5" />
+                                <path d="M2 22h20" />
+                            </svg>
+                        </button>
+                    </>
+                ) : (
+                    <div className="relative">
+                        <button
+                            onClick={() => setTopBarMenuOpen(!topBarMenuOpen)}
+                            className="p-2 theme-hover rounded theme-text-muted"
+                            title="More tools"
+                        >
+                            <MoreVertical size={18} />
+                        </button>
+                        {topBarMenuOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setTopBarMenuOpen(false)} />
+                                <div className="absolute right-0 top-full mt-1 theme-bg-secondary border theme-border rounded shadow-xl z-50 py-1 min-w-[160px]">
+                                    <button onClick={() => { createLibraryViewerPane?.(); setTopBarMenuOpen(false); }} className="flex items-center gap-2 px-3 py-1.5 w-full text-left theme-hover text-xs theme-text-primary"><BookOpen size={14} /> Library</button>
+                                    <button onClick={() => { createPhotoViewerPane?.(); setTopBarMenuOpen(false); }} className="flex items-center gap-2 px-3 py-1.5 w-full text-left theme-hover text-xs theme-text-primary"><Image size={14} /> Vixynt</button>
+                                    <button onClick={() => { createScherzoPane?.(); setTopBarMenuOpen(false); }} className="flex items-center gap-2 px-3 py-1.5 w-full text-left theme-hover text-xs theme-text-primary"><Music size={14} /> Scherzo</button>
+                                    <button onClick={() => { createDiskUsagePane?.(); setTopBarMenuOpen(false); }} className="flex items-center gap-2 px-3 py-1.5 w-full text-left theme-hover text-xs theme-text-primary"><HardDrive size={14} /> Disk Usage</button>
+                                    <button onClick={() => { createCronDaemonPane(); setTopBarMenuOpen(false); }} className="flex items-center gap-2 px-3 py-1.5 w-full text-left theme-hover text-xs theme-text-primary"><Zap size={14} /> Assembly Line</button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+                {/* Clock — 3 modes: analog, digital, digital+date */}
                 <span
-                    className="theme-text-muted tabular-nums cursor-pointer hover:text-gray-300"
-                    onClick={() => setShowDateTime(!showDateTime)}
-                    title={showDateTime ? "Hide date/time" : "Show date/time"}
+                    className="theme-text-muted tabular-nums cursor-pointer hover:text-gray-300 flex-shrink-0"
+                    onClick={() => setClockMode(prev => prev === 'analog' ? 'digital' : prev === 'digital' ? 'digital-date' : 'analog')}
+                    title="Click to cycle clock mode"
                 >
-                    {showDateTime ? (
-                        `${currentTime.toLocaleDateString()} ${currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    ) : (
+                    {clockMode === 'analog' ? (
+                        <svg width="18" height="18" viewBox="0 0 20 20" className="inline-block">
+                            <circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
+                            {/* Hour hand */}
+                            <line
+                                x1="10" y1="10"
+                                x2={10 + 4.5 * Math.sin(((currentTime.getHours() % 12) + currentTime.getMinutes() / 60) * Math.PI / 6)}
+                                y2={10 - 4.5 * Math.cos(((currentTime.getHours() % 12) + currentTime.getMinutes() / 60) * Math.PI / 6)}
+                                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                            />
+                            {/* Minute hand */}
+                            <line
+                                x1="10" y1="10"
+                                x2={10 + 6.5 * Math.sin(currentTime.getMinutes() * Math.PI / 30)}
+                                y2={10 - 6.5 * Math.cos(currentTime.getMinutes() * Math.PI / 30)}
+                                stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
+                            />
+                            <circle cx="10" cy="10" r="1" fill="currentColor" />
+                        </svg>
+                    ) : clockMode === 'digital' ? (
                         currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    ) : (
+                        `${currentTime.toLocaleDateString()} ${currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                     )}
                 </span>
             </div>
@@ -7729,82 +7785,95 @@ const renderMainContent = () => {
 
                         setRootLayoutNode(newLayout);
                         setActiveContentPaneId(newPaneId);
+
+                        // Load file content for editor panes
+                        if (contentType === 'editor' && draggedItem.id) {
+                            (async () => {
+                                try {
+                                    const response = await window.api?.readFileContent?.(draggedItem.id);
+                                    if (response && !response.error) {
+                                        contentDataRef.current[newPaneId].fileContent = response.content;
+                                        contentDataRef.current[newPaneId].fileChanged = false;
+                                        setRootLayoutNode(prev => ({ ...prev }));
+                                    }
+                                } catch (err) {
+                                    console.error('Error loading file content:', err);
+                                }
+                            })();
+                        }
+
                         setDraggedItem(null);
                     }}  >
-                    <div className="text-center text-gray-400 max-w-md mx-auto">
-                        <div className="mb-6">
-                            <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-3">Keyboard Shortcuts</div>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
-                                <div className="text-right text-gray-500">⌘ P</div><div className="text-left">Command palette</div>
-                                <div className="text-right text-gray-500">⌘ ⇧ C</div><div className="text-left">New chat</div>
-                                <div className="text-right text-gray-500">⌘ ⇧ T</div><div className="text-left">New terminal</div>
-                                <div className="text-right text-gray-500">⌘ O</div><div className="text-left">Open file</div>
-                                <div className="text-right text-gray-500">⌘ B</div><div className="text-left">New browser</div>
-                                <div className="text-right text-gray-500">⌘ ⇧ F</div><div className="text-left">Global search</div>
-                            </div>
+                    <div className="text-center text-gray-400 max-w-lg mx-auto">
+                        <div className="mb-8">
+                            {(() => {
+                                const mod = navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
+                                const shift = navigator.platform?.toLowerCase().includes('mac') ? '⇧' : 'Shift+';
+                                return (<>
+                                    <div className="text-sm uppercase tracking-wider text-gray-500 mb-4">Keyboard Shortcuts</div>
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                                        <div className="text-right text-gray-500">{mod}P</div><div className="text-left">Command palette</div>
+                                        <div className="text-right text-gray-500">{mod}{shift}C</div><div className="text-left">New chat</div>
+                                        <div className="text-right text-gray-500">{mod}{shift}T</div><div className="text-left">New terminal</div>
+                                        <div className="text-right text-gray-500">{mod}O</div><div className="text-left">Open file</div>
+                                        <div className="text-right text-gray-500">{mod}B</div><div className="text-left">New browser</div>
+                                        <div className="text-right text-gray-500">{mod}{shift}F</div><div className="text-left">Global search</div>
+                                    </div>
+                                </>);
+                            })()}
                         </div>
-                        <div className="text-[10px] text-gray-600">
+                        <div className="text-xs text-gray-600">
                             <span className="text-gray-500 not-italic">Tip of the day: </span>
                             <span className="italic">{(() => {
+                                const m = navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
+                                const s = navigator.platform?.toLowerCase().includes('mac') ? '⇧' : 'Shift+';
                                 const tips = [
-                                    // Drag & Drop
                                     "Drag files from the sidebar to create new panes",
                                     "Drag tabs between panes to reorganize your workspace",
                                     "Drag pane edges to resize them",
                                     "Drag a tab to the edge of a pane to split it",
                                     "Drag images directly into chat to share them",
                                     "Drag folders from finder into the sidebar to add them",
-                                    // Pane Management
                                     "Double-click a tab to maximize that pane",
                                     "Click a maximized pane's tab again to restore it",
                                     "Close unused panes to simplify your workspace",
-                                    "Use ⌘W to close the current tab",
-                                    // Context Menus
+                                    `Use ${m}W to close the current tab`,
                                     "Right-click on tabs for more options",
                                     "Right-click files in the sidebar for context actions",
                                     "Right-click in the editor for code actions",
                                     "Right-click on folders to create new files",
-                                    // Sidebar Features
                                     "Click the folder icon in the sidebar to open a new project",
                                     "Use the search bar in the sidebar to filter files",
                                     "Toggle folders open/closed by clicking their arrows",
                                     "Pin frequently used files by starring them",
-                                    // Terminal Features
-                                    "Use ⌘⇧T to open a new terminal quickly",
+                                    `Use ${m}${s}T to open a new terminal quickly`,
                                     "Terminal supports multiple shells and sessions",
                                     "Run npcsh commands directly in the terminal",
                                     "Use Ctrl+C to cancel running commands",
-                                    // Editor Features
-                                    "Use ⌘F to search within the current file",
-                                    "Use ⌘⇧F for global search across all files",
+                                    `Use ${m}F to search within the current file`,
+                                    `Use ${m}${s}F for global search across all files`,
                                     "Click line numbers to set breakpoints",
-                                    "Use multiple cursors with ⌘+click",
-                                    // Git Features
+                                    `Use multiple cursors with ${m}click`,
                                     "View git status with the diff viewer",
                                     "Stage changes directly from the diff viewer",
                                     "Commit messages support markdown formatting",
                                     "View file history through the context menu",
-                                    // Notebook & Experiment Features
                                     "Open .ipynb files for Jupyter notebook editing",
                                     "Create .exp files for reproducible experiments",
                                     "Run notebook cells with Shift+Enter",
                                     "Export notebooks to various formats",
-                                    // Browser Features
-                                    "Use ⌘B to open a new browser pane",
+                                    `Use ${m}B to open a new browser pane`,
                                     "Use Ctrl+R to refresh the browser",
                                     "Use Ctrl+J to open the download manager",
                                     "Browser panes can be split for side-by-side viewing",
-                                    // File Management
-                                    "Use ⌘N to create a new folder",
-                                    "Use ⌘O to quickly open any file",
+                                    `Use ${m}N to create a new folder`,
+                                    `Use ${m}O to quickly open any file`,
                                     "Double-click files in the sidebar to open them",
                                     "Supported formats: PDF, CSV, Excel, images, and more",
-                                    // Command Palette
-                                    "Use ⌘P to access all commands quickly",
+                                    `Use ${m}P to access all commands quickly`,
                                     "Type '>' in the command palette for commands",
                                     "Type '@' in the command palette to search symbols",
-                                    // Misc Tips
-                                    "Use ⌘⇧N to open a new window",
+                                    `Use ${m}${s}N to open a new window`,
                                     "Press Escape to close menus and dialogs",
                                     "Hover over icons for tooltips",
                                     "Check the status bar for git and system info",
@@ -7855,24 +7924,40 @@ const renderMainContent = () => {
                         </div>
                     </div>
                 </div>
-                <StatusBar
-                    createDBToolPane={createDBToolPane}
-                    createTeamManagementPane={createTeamManagementPane}
-                    paneItems={[]}
-                    setActiveContentPaneId={setActiveContentPaneId}
-                    pendingMemoryCount={pendingMemoryCount}
-                    createMemoryManagerPane={createMemoryManagerPane}
-                    kgGeneration={kgGeneration}
-                    createGraphViewerPane={createGraphViewerPane}
-                    createNPCTeamPane={createNPCTeamPane}
-                    createJinxPane={createJinxPane}
-                    height={bottomBarHeight}
-                    onStartResize={() => setIsResizingBottomBar(true)}
-                    sidebarCollapsed={sidebarCollapsed}
-                    onExpandSidebar={() => setSidebarCollapsed(false)}
-                    topBarCollapsed={topBarCollapsed}
-                    onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('npcStudio_topBarCollapsed', 'false'); }}
-                />
+                {bottomBarCollapsed ? (
+                    <div
+                        className="h-1 hover:h-4 flex items-center justify-center cursor-pointer theme-bg-tertiary border-t theme-border transition-all group"
+                        onClick={() => { setBottomBarCollapsed(false); localStorage.setItem('incognide_bottomBarCollapsed', 'false'); }}
+                        title="Show status bar"
+                    >
+                        <ChevronUp size={10} className="opacity-0 group-hover:opacity-60" />
+                    </div>
+                ) : (
+                    <StatusBar
+                        createDBToolPane={createDBToolPane}
+                        createTeamManagementPane={createTeamManagementPane}
+                        paneItems={[]}
+                        setActiveContentPaneId={setActiveContentPaneId}
+                        pendingMemoryCount={pendingMemoryCount}
+                        createMemoryManagerPane={createMemoryManagerPane}
+                        kgGeneration={kgGeneration}
+                        createGraphViewerPane={createGraphViewerPane}
+                        createNPCTeamPane={createNPCTeamPane}
+                        createJinxPane={createJinxPane}
+                        height={bottomBarHeight}
+                        onStartResize={() => setIsResizingBottomBar(true)}
+                        sidebarCollapsed={sidebarCollapsed}
+                        onExpandSidebar={() => setSidebarCollapsed(false)}
+                        topBarCollapsed={topBarCollapsed}
+                        onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('incognide_topBarCollapsed', 'false'); }}
+                        appVersion={appVersion}
+                        updateAvailable={updateAvailable}
+                        onCheckForUpdates={checkForUpdates}
+                        onCollapse={() => { setBottomBarCollapsed(true); localStorage.setItem('incognide_bottomBarCollapsed', 'true'); }}
+                        openMode={openMode}
+                        onToggleOpenMode={() => { setOpenMode(m => { const next = m === 'pane' ? 'tab' : 'pane'; localStorage.setItem('incognide_openMode', next); return next; }); }}
+                    />
+                )}
             </main>
         );
     }
@@ -7916,24 +8001,40 @@ const renderMainContent = () => {
                     </div>
                 )}
             </div>
-            <StatusBar
-                createDBToolPane={createDBToolPane}
-                createTeamManagementPane={createTeamManagementPane}
-                paneItems={paneItems}
-                setActiveContentPaneId={setActiveContentPaneId}
-                pendingMemoryCount={pendingMemoryCount}
-                createMemoryManagerPane={createMemoryManagerPane}
-                kgGeneration={kgGeneration}
-                createGraphViewerPane={createGraphViewerPane}
-                createNPCTeamPane={createNPCTeamPane}
-                createJinxPane={createJinxPane}
-                height={bottomBarHeight}
-                onStartResize={() => setIsResizingBottomBar(true)}
-                sidebarCollapsed={sidebarCollapsed}
-                onExpandSidebar={() => setSidebarCollapsed(false)}
-                topBarCollapsed={topBarCollapsed}
-                onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('npcStudio_topBarCollapsed', 'false'); }}
-            />
+            {bottomBarCollapsed ? (
+                <div
+                    className="h-1 hover:h-4 flex items-center justify-center cursor-pointer theme-bg-tertiary border-t theme-border transition-all group"
+                    onClick={() => { setBottomBarCollapsed(false); localStorage.setItem('incognide_bottomBarCollapsed', 'false'); }}
+                    title="Show status bar"
+                >
+                    <ChevronUp size={10} className="opacity-0 group-hover:opacity-60" />
+                </div>
+            ) : (
+                <StatusBar
+                    createDBToolPane={createDBToolPane}
+                    createTeamManagementPane={createTeamManagementPane}
+                    paneItems={paneItems}
+                    setActiveContentPaneId={setActiveContentPaneId}
+                    pendingMemoryCount={pendingMemoryCount}
+                    createMemoryManagerPane={createMemoryManagerPane}
+                    kgGeneration={kgGeneration}
+                    createGraphViewerPane={createGraphViewerPane}
+                    createNPCTeamPane={createNPCTeamPane}
+                    createJinxPane={createJinxPane}
+                    height={bottomBarHeight}
+                    onStartResize={() => setIsResizingBottomBar(true)}
+                    sidebarCollapsed={sidebarCollapsed}
+                    onExpandSidebar={() => setSidebarCollapsed(false)}
+                    topBarCollapsed={topBarCollapsed}
+                    onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('incognide_topBarCollapsed', 'false'); }}
+                    appVersion={appVersion}
+                    updateAvailable={updateAvailable}
+                    onCheckForUpdates={checkForUpdates}
+                    onCollapse={() => { setBottomBarCollapsed(true); localStorage.setItem('incognide_bottomBarCollapsed', 'true'); }}
+                    openMode={openMode}
+                    onToggleOpenMode={() => { setOpenMode(m => { const next = m === 'pane' ? 'tab' : 'pane'; localStorage.setItem('incognide_openMode', next); return next; }); }}
+                />
+            )}
         </main>
     );
 };
@@ -8095,8 +8196,8 @@ const renderMainContent = () => {
         topBarHeight={topBarHeight}
         bottomBarHeight={bottomBarHeight}
         topBarCollapsed={topBarCollapsed}
-        onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('npcStudio_topBarCollapsed', 'false'); }}
-        onCollapseTopBar={() => { setTopBarCollapsed(true); localStorage.setItem('npcStudio_topBarCollapsed', 'true'); }}
+        onExpandTopBar={() => { setTopBarCollapsed(false); localStorage.setItem('incognide_topBarCollapsed', 'false'); }}
+        onCollapseTopBar={() => { setTopBarCollapsed(true); localStorage.setItem('incognide_topBarCollapsed', 'true'); }}
         setDownloadManagerOpen={setDownloadManagerOpen}
     />
     {renderMainContent()}
@@ -8175,7 +8276,7 @@ const renderMainContent = () => {
                                 case 'pptx':
                                     return renderPptxViewer({ nodeId: zenModePaneId });
                                 case 'latex':
-                                    return renderLatexViewer({ nodeId: zenModePaneId });
+                                    return renderLatexViewer({ nodeId: zenModePaneId, isZenMode: true, onToggleZen: () => setZenModePaneId(null) });
                                 case 'image':
                                     return renderPicViewer({ nodeId: zenModePaneId });
                                 case 'mindmap':

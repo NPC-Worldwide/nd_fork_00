@@ -12,7 +12,7 @@ export const triggerAutoTTS = async (text: string) => {
         let engine = 'kokoro';
         let voice = 'af_heart';
         try {
-            const stored = localStorage.getItem('npcStudio_ttsSettings');
+            const stored = localStorage.getItem('incognide_ttsSettings');
             if (stored) {
                 const settings = JSON.parse(stored);
                 if (settings.engine) engine = settings.engine;
@@ -808,6 +808,7 @@ export const usePaneAwareStreamListeners = (
             // Helper to process a single parsed event
             const processEvent = (parsed: any, isDecisionFlag: boolean) => {
                 let content = '', reasoningContent = '', toolCalls = null, isDecision = isDecisionFlag;
+                let usage: { input_tokens: number; output_tokens: number; cost: number } | null = null;
 
                 if (parsed.choices?.[0]?.delta) {
                     isDecision = parsed.choices[0].delta.role === 'decision';
@@ -817,7 +818,13 @@ export const usePaneAwareStreamListeners = (
 
                 if (parsed.type) {
                     const type = parsed.type;
-                    if (type === 'tool_execution_start' && Array.isArray(parsed.tool_calls)) {
+                    if (type === 'usage') {
+                        usage = {
+                            input_tokens: parsed.input_tokens || 0,
+                            output_tokens: parsed.output_tokens || 0,
+                            cost: parsed.cost || 0
+                        };
+                    } else if (type === 'tool_execution_start' && Array.isArray(parsed.tool_calls)) {
                         toolCalls = parsed.tool_calls;
                     } else if ((type === 'tool_start' || type === 'tool_complete' || type === 'tool_result' || type === 'tool_error') && parsed.name) {
                         toolCalls = [{
@@ -835,11 +842,12 @@ export const usePaneAwareStreamListeners = (
                     toolCalls = parsed.tool_calls;
                 }
 
-                return { content, reasoningContent, toolCalls, isDecision };
+                return { content, reasoningContent, toolCalls, isDecision, usage };
             };
 
             try {
                 let content = '', reasoningContent = '', toolCalls = null, isDecision = false;
+                let usage: { input_tokens: number; output_tokens: number } | null = null;
 
                 if (typeof chunk === 'string') {
                     // Handle SSE format - may contain multiple events separated by \n\n
@@ -860,6 +868,7 @@ export const usePaneAwareStreamListeners = (
                                     reasoningContent += result.reasoningContent;
                                     if (result.toolCalls) toolCalls = result.toolCalls;
                                     isDecision = result.isDecision;
+                                    if (result.usage) usage = result.usage;
                                 } catch (parseErr) {
                                     console.warn('[STREAM] Failed to parse data event:', dataContent, parseErr);
                                 }
@@ -876,7 +885,9 @@ export const usePaneAwareStreamListeners = (
                     toolCalls = chunk.tool_calls || null;
                 } else if (chunk?.type) {
                     const type = chunk.type;
-                    if (type === 'tool_execution_start' && Array.isArray(chunk.tool_calls)) {
+                    if (type === 'usage') {
+                        usage = { input_tokens: chunk.input_tokens || 0, output_tokens: chunk.output_tokens || 0, cost: chunk.cost || 0 };
+                    } else if (type === 'tool_execution_start' && Array.isArray(chunk.tool_calls)) {
                         toolCalls = chunk.tool_calls;
                     } else if ((type === 'tool_start' || type === 'tool_complete' || type === 'tool_result' || type === 'tool_error') && chunk.name) {
                         toolCalls = [{
@@ -898,6 +909,13 @@ export const usePaneAwareStreamListeners = (
                     message.role = isDecision ? 'decision' : 'assistant';
                     message.content = (message.content || '') + content;
                     message.reasoningContent = (message.reasoningContent || '') + reasoningContent;
+
+                    // Store actual token usage from backend
+                    if (usage) {
+                        message.input_tokens = usage.input_tokens;
+                        message.output_tokens = usage.output_tokens;
+                        message.cost = usage.cost;
+                    }
 
                     // Initialize contentParts if not present
                     if (!message.contentParts) {

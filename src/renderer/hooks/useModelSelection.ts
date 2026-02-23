@@ -2,24 +2,24 @@ import { useState, useEffect, useMemo } from 'react';
 
 export function useModelSelection() {
     const [currentModel, setCurrentModel] = useState(() => {
-        const saved = localStorage.getItem('npcStudioCurrentModel');
+        const saved = localStorage.getItem('incognideCurrentModel');
         return saved ? JSON.parse(saved) : null;
     });
     const [currentProvider, setCurrentProvider] = useState(() => {
-        const saved = localStorage.getItem('npcStudioCurrentProvider');
+        const saved = localStorage.getItem('incognideCurrentProvider');
         return saved ? JSON.parse(saved) : null;
     });
     const [currentNPC, setCurrentNPC] = useState(() => {
-        const saved = localStorage.getItem('npcStudioCurrentNPC');
+        const saved = localStorage.getItem('incognideCurrentNPC');
         return saved ? JSON.parse(saved) : null;
     });
     const [selectedModels, setSelectedModels] = useState<string[]>(() => {
-        const saved = localStorage.getItem('npcStudioCurrentModel');
+        const saved = localStorage.getItem('incognideCurrentModel');
         const model = saved ? JSON.parse(saved) : null;
         return model ? [model] : [];
     });
     const [selectedNPCs, setSelectedNPCs] = useState<string[]>(() => {
-        const saved = localStorage.getItem('npcStudioCurrentNPC');
+        const saved = localStorage.getItem('incognideCurrentNPC');
         const npc = saved ? JSON.parse(saved) : null;
         return npc ? [npc] : [];
     });
@@ -32,11 +32,11 @@ export function useModelSelection() {
     const [npcsLoading, setNpcsLoading] = useState(false);
     const [npcsError, setNpcsError] = useState(null);
     const [executionMode, setExecutionMode] = useState(() => {
-        const saved = localStorage.getItem('npcStudioExecutionMode');
+        const saved = localStorage.getItem('incognideExecutionMode');
         return saved ? JSON.parse(saved) : 'chat';
     });
     const [favoriteModels, setFavoriteModels] = useState<Set<string>>(() => {
-        const saved = localStorage.getItem('npcStudioFavoriteModels');
+        const saved = localStorage.getItem('incognideFavoriteModels');
         return saved ? new Set(JSON.parse(saved)) : new Set();
     });
     const [showAllModels, setShowAllModels] = useState(true);
@@ -44,21 +44,21 @@ export function useModelSelection() {
     // Save currentModel to localStorage when it changes
     useEffect(() => {
         if (currentModel !== null) {
-            localStorage.setItem('npcStudioCurrentModel', JSON.stringify(currentModel));
+            localStorage.setItem('incognideCurrentModel', JSON.stringify(currentModel));
         }
     }, [currentModel]);
 
     // Save currentProvider to localStorage when it changes
     useEffect(() => {
         if (currentProvider !== null) {
-            localStorage.setItem('npcStudioCurrentProvider', JSON.stringify(currentProvider));
+            localStorage.setItem('incognideCurrentProvider', JSON.stringify(currentProvider));
         }
     }, [currentProvider]);
 
     // Save currentNPC to localStorage when it changes
     useEffect(() => {
         if (currentNPC !== null) {
-            localStorage.setItem('npcStudioCurrentNPC', JSON.stringify(currentNPC));
+            localStorage.setItem('incognideCurrentNPC', JSON.stringify(currentNPC));
         }
     }, [currentNPC]);
 
@@ -90,7 +90,7 @@ export function useModelSelection() {
 
     // Save executionMode to localStorage when it changes
     useEffect(() => {
-        localStorage.setItem('npcStudioExecutionMode', JSON.stringify(executionMode));
+        localStorage.setItem('incognideExecutionMode', JSON.stringify(executionMode));
     }, [executionMode]);
 
     const toggleFavoriteModel = (modelValue: string) => {
@@ -102,7 +102,7 @@ export function useModelSelection() {
             } else {
                 newFavorites.add(modelValue);
             }
-            localStorage.setItem('npcStudioFavoriteModels', JSON.stringify(Array.from(newFavorites)));
+            localStorage.setItem('incognideFavoriteModels', JSON.stringify(Array.from(newFavorites)));
             return newFavorites;
         });
     };

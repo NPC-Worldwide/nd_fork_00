@@ -608,7 +608,7 @@ export const MessageLabeling: React.FC<MessageLabelingProps> = ({
 
 // Export utility for managing labels
 export const MessageLabelStorage = {
-    storageKey: 'npcStudio_messageLabels',
+    storageKey: 'incognide_messageLabels',
 
     getAll(): MessageLabel[] {
         try {
@@ -710,7 +710,7 @@ export const MessageLabelStorage = {
 
 // Storage utility for conversation labels
 export const ConversationLabelStorage = {
-    storageKey: 'npcStudio_conversationLabels',
+    storageKey: 'incognide_conversationLabels',
 
     getAll(): ConversationLabel[] {
         try {
@@ -767,7 +767,7 @@ export const ConversationLabelStorage = {
 
 // Storage utility for context files
 export const ContextFileStorage = {
-    storageKey: 'npcStudio_contextFiles',
+    storageKey: 'incognide_contextFiles',
 
     getAll(): ContextFile[] {
         try {

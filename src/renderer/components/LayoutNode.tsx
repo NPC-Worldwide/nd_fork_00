@@ -1,6 +1,6 @@
 import React, { useCallback, memo, useState, useEffect, useRef } from 'react';
 import {
-    BarChart3, Loader, X, ServerCrash, MessageSquare, BrainCircuit, Bot,
+    BarChart3, Loader, X, ServerCrash, MessageSquare, Bot,
     ChevronDown, ChevronRight, Database, Table, LineChart, BarChart as BarChartIcon,
     Star, Trash2, Play, Copy, Download, Plus, Settings2, Edit, Terminal, Globe,
     GitBranch, Brain, Zap, Clock, ChevronsRight, Repeat, ListFilter, File as FileIcon,
@@ -17,225 +17,7 @@ import { ChatHeaderContent } from './pane-headers';
 
 // Token cost calculator based on model pricing ($ per 1K tokens)
 // Source: Helicone LLM API Pricing - Updated Nov 2025
-// Prices converted from per 1M to per 1K tokens (divide by 1000)
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    // OpenAI models
-    'gpt-5': { input: 0.00125, output: 0.01 },
-    'gpt-5-mini': { input: 0.00025, output: 0.002 },
-    'gpt-5-nano': { input: 0.00005, output: 0.0004 },
-    'gpt-5.1': { input: 0.00125, output: 0.01 },
-    'gpt-4.1': { input: 0.002, output: 0.008 },
-    'gpt-4.1-mini': { input: 0.0004, output: 0.0016 },
-    'gpt-4.1-nano': { input: 0.0001, output: 0.0004 },
-    'gpt-4o': { input: 0.0025, output: 0.01 },
-    'gpt-4o-2024-08-06': { input: 0.0025, output: 0.01 },
-    'gpt-4o-2024-11-20': { input: 0.0025, output: 0.01 },
-    'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
-    'gpt-4-turbo': { input: 0.01, output: 0.03 },
-    'gpt-4': { input: 0.03, output: 0.06 },
-    'gpt-4-32k': { input: 0.06, output: 0.12 },
-    'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
-    'gpt-3.5-turbo-0125': { input: 0.0005, output: 0.0015 },
-    'chatgpt-4o-latest': { input: 0.005, output: 0.015 },
-    'o1': { input: 0.015, output: 0.06 },
-    'o1-preview': { input: 0.015, output: 0.06 },
-    'o1-mini': { input: 0.0011, output: 0.0044 },
-    'o1-pro': { input: 0.15, output: 0.6 },
-    'o3': { input: 0.002, output: 0.008 },
-    'o3-mini': { input: 0.0011, output: 0.0044 },
-    'o3-pro': { input: 0.02, output: 0.08 },
-    'o4-mini': { input: 0.0011, output: 0.0044 },
-    'codex-mini': { input: 0.0015, output: 0.006 },
-    // Anthropic models
-    'claude-opus-4': { input: 0.015, output: 0.075 },
-    'claude-opus-4-1': { input: 0.015, output: 0.075 },
-    'claude-opus-4-5': { input: 0.005, output: 0.025 },
-    'claude-sonnet-4': { input: 0.003, output: 0.015 },
-    'claude-sonnet-4-5': { input: 0.003, output: 0.015 },
-    'claude-3.7-sonnet': { input: 0.003, output: 0.015 },
-    'claude-3-7-sonnet': { input: 0.003, output: 0.015 },
-    'claude-3.5-sonnet': { input: 0.003, output: 0.015 },
-    'claude-3-5-sonnet': { input: 0.003, output: 0.015 },
-    'claude-3-opus': { input: 0.015, output: 0.075 },
-    'claude-3-sonnet': { input: 0.003, output: 0.015 },
-    'claude-3-haiku': { input: 0.00025, output: 0.00125 },
-    'claude-3.5-haiku': { input: 0.0008, output: 0.004 },
-    'claude-3-5-haiku': { input: 0.0008, output: 0.004 },
-    'claude-haiku-4-5': { input: 0.001, output: 0.005 },
-    'claude-2': { input: 0.008, output: 0.024 },
-    'claude-instant': { input: 0.00163, output: 0.00551 },
-    // Google models
-    'gemini-3-pro': { input: 0.002, output: 0.012 },
-    'gemini-2.5-pro': { input: 0.00125, output: 0.01 },
-    'gemini-2.5-flash': { input: 0.0003, output: 0.0025 },
-    'gemini-2.5-flash-lite': { input: 0.0001, output: 0.0004 },
-    'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
-    'gemini-2.0-flash-lite': { input: 0.000075, output: 0.0003 },
-    'gemini-1.5-pro': { input: 0.0035, output: 0.0105 },
-    'gemini-1.5-flash': { input: 0.00035, output: 0.00105 },
-    'gemini-flash-1.5-8b': { input: 0.0000375, output: 0.00015 },
-    'gemini-pro': { input: 0.000125, output: 0.000375 },
-    'gemma-3-27b': { input: 0.00009, output: 0.00016 },
-    'gemma-3-12b': { input: 0.00003, output: 0.0001 },
-    'gemma-3-4b': { input: 0.000017, output: 0.0000682 },
-    'gemma-2-27b': { input: 0.00065, output: 0.00065 },
-    'gemma-2-9b': { input: 0.00001, output: 0.00003 },
-    // Meta Llama models
-    'llama-4-maverick': { input: 0.00015, output: 0.0006 },
-    'llama-4-scout': { input: 0.00008, output: 0.0003 },
-    'llama-3.3-70b': { input: 0.00013, output: 0.00038 },
-    'llama-3.1-405b': { input: 0.0008, output: 0.0008 },
-    'llama-3.1-70b': { input: 0.0004, output: 0.0004 },
-    'llama-3.1-8b': { input: 0.00002, output: 0.00003 },
-    'llama-3-70b': { input: 0.0003, output: 0.0004 },
-    'llama-3-8b': { input: 0.00003, output: 0.00006 },
-    'llama-3.2-90b': { input: 0.00035, output: 0.0004 },
-    'llama-3.2-11b': { input: 0.000049, output: 0.000049 },
-    'llama-3.2-3b': { input: 0.00002, output: 0.00002 },
-    'llama-3.2-1b': { input: 0.000005, output: 0.00001 },
-    // Mistral models
-    'mistral-large': { input: 0.002, output: 0.006 },
-    'mistral-medium-3': { input: 0.0004, output: 0.002 },
-    'mistral-small': { input: 0.0002, output: 0.0006 },
-    'mistral-small-3.1': { input: 0.00005, output: 0.0001 },
-    'mistral-small-3.2': { input: 0.0001, output: 0.0003 },
-    'mistral-nemo': { input: 0.00002, output: 0.00004 },
-    'mistral-saba': { input: 0.0002, output: 0.0006 },
-    'ministral-8b': { input: 0.0001, output: 0.0001 },
-    'ministral-3b': { input: 0.00004, output: 0.00004 },
-    'mixtral-8x22b': { input: 0.002, output: 0.006 },
-    'mixtral-8x7b': { input: 0.00054, output: 0.00054 },
-    'mistral-7b': { input: 0.000028, output: 0.000054 },
-    'codestral': { input: 0.0003, output: 0.0009 },
-    'devstral-small': { input: 0.00005, output: 0.00022 },
-    'devstral-medium': { input: 0.0004, output: 0.002 },
-    'magistral-medium': { input: 0.002, output: 0.005 },
-    'magistral-small': { input: 0.0005, output: 0.0015 },
-    'pixtral-12b': { input: 0.0001, output: 0.0001 },
-    'pixtral-large': { input: 0.002, output: 0.006 },
-    // DeepSeek
-    'deepseek-r1': { input: 0.0004, output: 0.002 },
-    'deepseek-r1-0528': { input: 0.0004, output: 0.00175 },
-    'deepseek-r1-distill-llama-70b': { input: 0.00003, output: 0.00013 },
-    'deepseek-r1-distill-qwen-32b': { input: 0.00027, output: 0.00027 },
-    'deepseek-r1-distill-qwen-14b': { input: 0.00015, output: 0.00015 },
-    'deepseek-v3': { input: 0.0009, output: 0.0009 },
-    'deepseek-v3-0324': { input: 0.00024, output: 0.00084 },
-    'deepseek-chat': { input: 0.0003, output: 0.00085 },
-    'deepseek-prover-v2': { input: 0.0005, output: 0.00218 },
-    // X/Grok
-    'grok-4': { input: 0.003, output: 0.015 },
-    'grok-4-fast': { input: 0.0002, output: 0.0005 },
-    'grok-3': { input: 0.003, output: 0.015 },
-    'grok-3-mini': { input: 0.0003, output: 0.0005 },
-    'grok-3-fast': { input: 0.005, output: 0.025 },
-    'grok-2': { input: 0.002, output: 0.01 },
-    'grok-beta': { input: 0.005, output: 0.015 },
-    'grok-code-fast-1': { input: 0.0002, output: 0.0015 },
-    // Qwen
-    'qwen-max': { input: 0.0016, output: 0.0064 },
-    'qwen-plus': { input: 0.0004, output: 0.0012 },
-    'qwen-turbo': { input: 0.00005, output: 0.0002 },
-    'qwen3-235b': { input: 0.00018, output: 0.00054 },
-    'qwen3-coder': { input: 0.00022, output: 0.00095 },
-    'qwen3-32b': { input: 0.00005, output: 0.0002 },
-    'qwen3-30b': { input: 0.00006, output: 0.00022 },
-    'qwen3-14b': { input: 0.00005, output: 0.00022 },
-    'qwen3-8b': { input: 0.000035, output: 0.000138 },
-    'qwen3-4b': { input: 0, output: 0 },
-    'qwen2.5-coder-32b': { input: 0.00004, output: 0.00016 },
-    'qwen2.5-72b': { input: 0.00007, output: 0.00026 },
-    'qwen2.5-vl-72b': { input: 0.00008, output: 0.00033 },
-    'qwq-32b': { input: 0.00015, output: 0.0004 },
-    // Cohere
-    'command-a': { input: 0.0025, output: 0.01 },
-    'command-r-plus': { input: 0.0025, output: 0.01 },
-    'command-r': { input: 0.00015, output: 0.0006 },
-    'command-r7b': { input: 0.0000375, output: 0.00015 },
-    // Perplexity
-    'sonar': { input: 0.001, output: 0.001 },
-    'sonar-pro': { input: 0.003, output: 0.015 },
-    'sonar-reasoning': { input: 0.001, output: 0.005 },
-    'sonar-reasoning-pro': { input: 0.002, output: 0.008 },
-    'sonar-deep-research': { input: 0.002, output: 0.008 },
-    // Amazon
-    'nova-pro': { input: 0.0008, output: 0.0032 },
-    'nova-lite': { input: 0.00006, output: 0.00024 },
-    'nova-micro': { input: 0.000035, output: 0.00014 },
-    // MiniMax
-    'minimax-01': { input: 0.0002, output: 0.0011 },
-    'minimax-m1': { input: 0.0004, output: 0.0022 },
-    // Moonshot/Kimi
-    'kimi-k2': { input: 0.00014, output: 0.00249 },
-    'kimi-dev-72b': { input: 0.00029, output: 0.00115 },
-    // AI21
-    'jamba-mini': { input: 0.0002, output: 0.0004 },
-    'jamba-large': { input: 0.002, output: 0.008 },
-    // Groq (fast inference - prices vary)
-    'groq-llama-3.3-70b': { input: 0.00059, output: 0.00079 },
-    'groq-llama-3.1-8b': { input: 0.00005, output: 0.00008 },
-    'groq-mixtral-8x7b': { input: 0.00024, output: 0.00024 },
-    'groq-gemma2-9b': { input: 0.0002, output: 0.0002 },
-    // Inflection
-    'inflection-3-productivity': { input: 0.0025, output: 0.01 },
-    'inflection-3-pi': { input: 0.0025, output: 0.01 },
-    // Microsoft Phi
-    'phi-4': { input: 0.00006, output: 0.00014 },
-    'phi-4-multimodal': { input: 0.00005, output: 0.0001 },
-    'phi-4-reasoning-plus': { input: 0.00007, output: 0.00035 },
-    'phi-3.5-mini': { input: 0.0001, output: 0.0001 },
-    'phi-3-mini': { input: 0.0001, output: 0.0001 },
-    'phi-3-medium': { input: 0.001, output: 0.001 },
-    // Nvidia
-    'nemotron-70b': { input: 0.0006, output: 0.0006 },
-    'nemotron-ultra-253b': { input: 0.0006, output: 0.0018 },
-    'nemotron-nano-9b': { input: 0.00004, output: 0.00016 },
-    // Morph
-    'morph-v3-large': { input: 0.0009, output: 0.0019 },
-    'morph-v3-fast': { input: 0.0008, output: 0.0012 },
-    // Mercury/Inception
-    'mercury': { input: 0.00025, output: 0.001 },
-    'mercury-coder': { input: 0.00025, output: 0.001 },
-    // Local/self-hosted models (free)
-    'ollama': { input: 0, output: 0 },
-    'local': { input: 0, output: 0 },
-    'localhost': { input: 0, output: 0 },
-    'llama': { input: 0, output: 0 },
-    'llama3': { input: 0, output: 0 },
-    'llama3.1': { input: 0, output: 0 },
-    'llama3.2': { input: 0, output: 0 },
-    'mistral': { input: 0, output: 0 },
-    'codellama': { input: 0, output: 0 },
-    'deepseek-coder': { input: 0, output: 0 },
-    'qwen2': { input: 0, output: 0 },
-    'phi': { input: 0, output: 0 },
-    'gemma': { input: 0, output: 0 },
-    'nomic': { input: 0, output: 0 },
-};
 
-const calculateTokenCost = (tokenCount: number, models: Set<string>): number => {
-    if (!tokenCount || tokenCount === 0) return 0;
-
-    // Find the most expensive model used to give upper bound estimate
-    let maxCostPer1K = 0;
-    models?.forEach(model => {
-        const modelLower = model?.toLowerCase() || '';
-        for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
-            if (modelLower.includes(key)) {
-                const avgCost = (pricing.input + pricing.output) / 2;
-                if (avgCost > maxCostPer1K) maxCostPer1K = avgCost;
-                break;
-            }
-        }
-    });
-
-    // If no known model, assume a mid-range cost
-    if (maxCostPer1K === 0 && models?.size > 0) {
-        maxCostPer1K = 0.002; // Default estimate
-    }
-
-    return (tokenCount / 1000) * maxCostPer1K;
-};
 
 // Generate a unique ID for layout nodes
 const generateLayoutId = () => `layout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -588,6 +370,8 @@ export const LayoutNode = memo(({ node, path, component }) => {
             onExpandTopBar,
             // Current working directory
             currentPath,
+            // Pane locking (per-pane)
+            lockedPanes, togglePaneLocked,
         } = component;
 
         // Get chat input props for this specific pane
@@ -923,6 +707,14 @@ export const LayoutNode = memo(({ node, path, component }) => {
                 if (tabs[currentTabIndex]) {
                     tabs[currentTabIndex].fileContent = paneData.fileContent;
                     tabs[currentTabIndex].fileChanged = paneData.fileChanged;
+                    tabs[currentTabIndex].isUntitled = paneData.isUntitled;
+                    // Save chat state for chat tabs
+                    if (tabs[currentTabIndex].contentType === 'chat') {
+                        tabs[currentTabIndex].chatMessages = paneData.chatMessages;
+                        tabs[currentTabIndex].executionMode = paneData.executionMode;
+                        tabs[currentTabIndex].selectedJinx = paneData.selectedJinx;
+                        tabs[currentTabIndex].chatStats = paneData.chatStats;
+                    }
                     // IMPORTANT: Save browserUrl and browserTitle for browser tabs
                     if (tabs[currentTabIndex].contentType === 'browser') {
                         if (paneData.browserUrl) tabs[currentTabIndex].browserUrl = paneData.browserUrl;
@@ -938,6 +730,14 @@ export const LayoutNode = memo(({ node, path, component }) => {
                 // Restore fileContent and fileChanged from the selected tab
                 paneData.fileContent = selectedTab.fileContent;
                 paneData.fileChanged = selectedTab.fileChanged || false;
+                paneData.isUntitled = selectedTab.isUntitled || false;
+                // Restore chat state for chat tabs
+                if (selectedTab.contentType === 'chat') {
+                    paneData.chatMessages = selectedTab.chatMessages;
+                    paneData.executionMode = selectedTab.executionMode;
+                    paneData.selectedJinx = selectedTab.selectedJinx;
+                    paneData.chatStats = selectedTab.chatStats;
+                }
                 // Preserve browserUrl and browserTitle for browser tabs
                 if (selectedTab.contentType === 'browser') {
                     paneData.browserUrl = selectedTab.browserUrl || 'about:blank';
@@ -962,6 +762,13 @@ export const LayoutNode = memo(({ node, path, component }) => {
                     if (tabs[currentTabIndex].contentType === 'editor') {
                         tabs[currentTabIndex].fileContent = paneData.fileContent;
                         tabs[currentTabIndex].fileChanged = paneData.fileChanged;
+                    }
+                    // Save chat state for chat tabs
+                    if (tabs[currentTabIndex].contentType === 'chat') {
+                        tabs[currentTabIndex].chatMessages = paneData.chatMessages;
+                        tabs[currentTabIndex].executionMode = paneData.executionMode;
+                        tabs[currentTabIndex].selectedJinx = paneData.selectedJinx;
+                        tabs[currentTabIndex].chatStats = paneData.chatStats;
                     }
                 }
 
@@ -992,6 +799,13 @@ export const LayoutNode = memo(({ node, path, component }) => {
                         paneData.fileContent = newActiveTab.fileContent;
                         paneData.fileChanged = newActiveTab.fileChanged || false;
                     }
+                    // Restore chat state for chat tabs
+                    if (newActiveTab?.contentType === 'chat') {
+                        paneData.chatMessages = newActiveTab.chatMessages;
+                        paneData.executionMode = newActiveTab.executionMode;
+                        paneData.selectedJinx = newActiveTab.selectedJinx;
+                        paneData.chatStats = newActiveTab.chatStats;
+                    }
                     setRootLayoutNode?.(prev => ({ ...prev }));
                 }
             }
@@ -1008,6 +822,12 @@ export const LayoutNode = memo(({ node, path, component }) => {
                     if (tabs[currentTabIndex].contentType === 'editor') {
                         tabs[currentTabIndex].fileContent = paneData.fileContent;
                         tabs[currentTabIndex].fileChanged = paneData.fileChanged;
+                    }
+                    if (tabs[currentTabIndex].contentType === 'chat') {
+                        tabs[currentTabIndex].chatMessages = paneData.chatMessages;
+                        tabs[currentTabIndex].executionMode = paneData.executionMode;
+                        tabs[currentTabIndex].selectedJinx = paneData.selectedJinx;
+                        tabs[currentTabIndex].chatStats = paneData.chatStats;
                     }
                 }
 
@@ -1051,10 +871,19 @@ export const LayoutNode = memo(({ node, path, component }) => {
                 const newTabId = `tab_${Date.now()}_${paneData.tabs.length}`;
                 let newContentId = null;
                 let title = contentType;
+                let extraChatProps: any = {};
 
                 if (contentType === 'chat') {
                     newContentId = `conv_${Date.now()}`;
                     title = 'New Chat';
+                    // Initialize chat state immediately so it doesn't show "No messages"
+                    const savedMode = localStorage.getItem('incognideExecutionMode');
+                    extraChatProps = {
+                        chatMessages: { messages: [], allMessages: [], displayedMessageCount: 20 },
+                        executionMode: savedMode ? JSON.parse(savedMode) : 'chat',
+                        selectedJinx: null,
+                        chatStats: { messageCount: 0, inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() },
+                    };
                 } else if (contentType === 'terminal') {
                     newContentId = `term_${Date.now()}`;
                     title = 'Terminal';
@@ -1076,7 +905,8 @@ export const LayoutNode = memo(({ node, path, component }) => {
                     id: newTabId,
                     contentType,
                     contentId: newContentId,
-                    title
+                    title,
+                    ...extraChatProps,
                 };
 
                 paneData.tabs.push(newTab);
@@ -1085,6 +915,13 @@ export const LayoutNode = memo(({ node, path, component }) => {
                 // Also update main paneData to reflect active tab
                 paneData.contentType = contentType;
                 paneData.contentId = newContentId;
+                // Apply chat state to pane data
+                if (extraChatProps.chatMessages) {
+                    paneData.chatMessages = extraChatProps.chatMessages;
+                    paneData.executionMode = extraChatProps.executionMode;
+                    paneData.selectedJinx = extraChatProps.selectedJinx;
+                    paneData.chatStats = extraChatProps.chatStats;
+                }
 
                 setRootLayoutNode?.(prev => ({ ...prev }));
             }
@@ -1276,40 +1113,11 @@ export const LayoutNode = memo(({ node, path, component }) => {
             );
         }
 
-        // LaTeX pane buttons (save, compile, status)
-        if (contentType === 'latex') {
-            paneHeaderChildren = (
-                <div className="flex items-center gap-1">
-                    {paneData?.hasChanges && <span className="text-yellow-400 text-[10px]">modified</span>}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (paneData?.onSave) paneData.onSave();
-                        }}
-                        disabled={!paneData?.hasChanges || paneData?.isSaving}
-                        className="p-1 rounded text-xs theme-button theme-hover disabled:opacity-30"
-                        title="Save (Ctrl+S)"
-                    >
-                        {paneData?.isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-                    </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (paneData?.onCompile) paneData.onCompile(true);
-                        }}
-                        disabled={paneData?.isCompiling}
-                        className={`p-1 rounded text-xs theme-button theme-hover disabled:opacity-50 ${paneData?.isCompiling ? 'text-yellow-400' : paneData?.compileStatus === 'success' ? 'text-green-400' : paneData?.compileStatus === 'error' ? 'text-red-400' : ''}`}
-                        title="Compile & Preview (Ctrl+Enter)"
-                    >
-                        {paneData?.isCompiling ? <Loader size={12} className="animate-spin" /> : <Play size={12} />}
-                    </button>
-                </div>
-            );
-        }
+        // LaTeX pane — no paneHeaderChildren needed, toolbar is integrated in LatexViewer
 
         // Chat pane uses custom header content
         if (contentType === 'chat') {
-            const chatStats = paneData?.chatStats || { messageCount: 0, tokenCount: 0, models: new Set(), agents: new Set(), providers: new Set() };
+            const chatStats = paneData?.chatStats || { messageCount: 0, inputTokens: 0, outputTokens: 0, totalCost: 0, models: new Set(), agents: new Set(), providers: new Set() };
             headerContent = (
                 <ChatHeaderContent
                     icon={headerIcon}
@@ -1349,8 +1157,9 @@ export const LayoutNode = memo(({ node, path, component }) => {
         if (tabs.length > 1) {
             tabs.forEach((tab, index) => {
                 const virtualId = `${node.id}_tab_${index}`;
+                const isActiveTab = index === activeTabIndex;
                 // Create or update virtual pane data for this tab
-                if (!contentDataRef.current[virtualId] || contentDataRef.current[virtualId].contentId !== tab.contentId) {
+                if (!contentDataRef.current[virtualId] || contentDataRef.current[virtualId].contentId !== tab.contentId || contentDataRef.current[virtualId].isUntitled !== tab.isUntitled) {
                     contentDataRef.current[virtualId] = {
                         contentType: tab.contentType,
                         contentId: tab.contentId,
@@ -1358,7 +1167,20 @@ export const LayoutNode = memo(({ node, path, component }) => {
                         browserTitle: tab.browserTitle,
                         fileContent: tab.fileContent,
                         fileChanged: tab.fileChanged,
+                        isUntitled: tab.isUntitled,
+                        chatMessages: tab.chatMessages,
+                        executionMode: tab.executionMode,
+                        selectedJinx: tab.selectedJinx,
+                        chatStats: tab.chatStats,
                     };
+                }
+                // For the active tab, keep chat state synced from the real pane data
+                // (updateContentPane sets chat props on paneData, not on the tab object)
+                if (isActiveTab && contentDataRef.current[virtualId]) {
+                    contentDataRef.current[virtualId].chatMessages = paneData?.chatMessages;
+                    contentDataRef.current[virtualId].executionMode = paneData?.executionMode;
+                    contentDataRef.current[virtualId].selectedJinx = paneData?.selectedJinx;
+                    contentDataRef.current[virtualId].chatStats = paneData?.chatStats;
                 }
             });
         }
@@ -1367,6 +1189,29 @@ export const LayoutNode = memo(({ node, path, component }) => {
         const renderTabContent = (tab: any, tabIndex: number) => {
             const virtualId = `${node.id}_tab_${tabIndex}`;
             const tabContentType = tab.contentType;
+            const isActiveTab = tabIndex === activeTabIndex;
+
+            // Special case: chat needs ChatInput wrapper and uses real pane ID for active tab
+            if (tabContentType === 'chat') {
+                if (isActiveTab) {
+                    return (
+                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto">
+                                {paneRenderers.chat?.({ nodeId: node.id })}
+                            </div>
+                            {chatInputProps && (
+                                <ChatInput
+                                    {...chatInputProps}
+                                    paneId={node.id}
+                                    onFocus={() => setActiveContentPaneId(node.id)}
+                                />
+                            )}
+                        </div>
+                    );
+                }
+                // Inactive chat tab: minimal placeholder (it's hidden anyway)
+                return <div />;
+            }
 
             // Special case: browser needs extra props
             if (tabContentType === 'browser') {
@@ -1424,6 +1269,14 @@ export const LayoutNode = memo(({ node, path, component }) => {
                     />
                 );
             }
+            if (contentType === 'latex') {
+                return paneRenderers.latex?.({
+                    nodeId: node.id,
+                    onToggleZen: toggleZenMode ? () => toggleZenMode(node.id) : undefined,
+                    isZenMode: zenModePaneId === node.id,
+                    onClose: () => closeContentPane(node.id, path),
+                });
+            }
 
             // Registry lookup for all standard pane types
             const renderer = paneRenderers[contentType];
@@ -1463,8 +1316,8 @@ export const LayoutNode = memo(({ node, path, component }) => {
                 )}
 
                 {/* Header - PaneHeader includes expand and close buttons */}
-                {/* Skip PaneHeader for browser, docx, pptx, csv - they have their own integrated toolbars */}
-                {contentType !== 'browser' && contentType !== 'docx' && contentType !== 'pptx' && contentType !== 'csv' && (
+                {/* Skip PaneHeader for browser, docx, pptx, csv, latex - they have their own integrated toolbars */}
+                {contentType !== 'browser' && contentType !== 'docx' && contentType !== 'pptx' && contentType !== 'csv' && contentType !== 'latex' && (
                     <PaneHeader
                         nodeId={node.id}
                         icon={headerIcon}
@@ -1478,7 +1331,7 @@ export const LayoutNode = memo(({ node, path, component }) => {
                         fileChanged={paneData?.fileChanged || activeTab?.fileChanged}
                         onSave={() => { if (paneData?.onSave) paneData.onSave(); }}
                         onStartRename={() => {
-                            if (contentId && (contentType === 'editor' || contentType === 'latex' || contentType === 'csv' || contentType === 'docx' || contentType === 'pptx')) {
+                            if (contentId) {
                                 setRenamingPaneId(node.id);
                                 setEditedFileName(getFileName(contentId) || '');
                             }
@@ -1500,13 +1353,35 @@ export const LayoutNode = memo(({ node, path, component }) => {
                         // Top bar collapse
                         topBarCollapsed={topBarCollapsed}
                         onExpandTopBar={onExpandTopBar}
+                        // Pane locking
+                        panesLocked={lockedPanes.has(node.id)}
+                        onTogglePanesLocked={() => togglePaneLocked(node.id)}
                     >
                         {paneHeaderChildren} {/* Pass the conditional children here */}
                     </PaneHeader>
                 )}
                 {/* Browser handles its own header with zen/close buttons inside WebBrowserViewer */}
 
-                {draggedItem && (
+                {/* Universal rename overlay for panes that skip PaneHeader (docx, pptx, csv, latex) */}
+                {renamingPaneId === node.id && (contentType === 'docx' || contentType === 'pptx' || contentType === 'csv' || contentType === 'latex') && (
+                    <div className="flex items-center gap-1 px-2 py-1 theme-bg-secondary border-b theme-border z-30">
+                        <input
+                            type="text"
+                            value={editedFileName}
+                            onChange={(e) => setEditedFileName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleConfirmRename?.(node.id, contentId);
+                                if (e.key === 'Escape') setRenamingPaneId(null);
+                            }}
+                            className="flex-1 px-1 py-0.5 text-xs theme-bg-primary theme-text-primary border theme-border rounded focus:outline-none focus:border-blue-500"
+                            autoFocus
+                        />
+                        <button onClick={() => handleConfirmRename?.(node.id, contentId)} className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500">OK</button>
+                        <button onClick={() => setRenamingPaneId(null)} className="px-1.5 py-0.5 text-xs theme-button theme-hover rounded">Cancel</button>
+                    </div>
+                )}
+
+                {draggedItem && !lockedPanes.has(node.id) && (
                     <>
                         {/* Center drop zone - explicit zone for adding as tab */}
                         <div

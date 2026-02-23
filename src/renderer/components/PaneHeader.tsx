@@ -49,7 +49,10 @@ export const PaneHeader = React.memo(({
     hideCloseButton,
     // Top bar collapse
     topBarCollapsed,
-    onExpandTopBar
+    onExpandTopBar,
+    // Pane locking
+    panesLocked,
+    onTogglePanesLocked
 }) => {
     const isPythonFile = filePath?.endsWith('.py');
     const nodePath = findNodePath?.(rootLayoutNode, nodeId);
@@ -143,9 +146,9 @@ export const PaneHeader = React.memo(({
 
     return (
         <div
-            draggable={!isRenaming}
+            draggable={!isRenaming && !panesLocked}
             onDragStart={(e) => {
-                if (isRenaming) {
+                if (isRenaming || panesLocked) {
                     e.preventDefault();
                     return;
                 }
@@ -177,7 +180,7 @@ export const PaneHeader = React.memo(({
                 borderBottom: '1px solid var(--border-color, #374151)',
                 fontSize: '12px',
                 flexShrink: 0,
-                cursor: 'move',
+                cursor: panesLocked ? 'default' : 'move',
                 boxSizing: 'border-box'
             }}
             className="theme-bg-secondary theme-border theme-text-muted"
@@ -209,8 +212,26 @@ export const PaneHeader = React.memo(({
                 </button>
             )}
 
-            {/* Close button - right side */}
-            {!hideCloseButton && (
+            {/* Lock toggle - before close */}
+            {onTogglePanesLocked && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onTogglePanesLocked(); }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className={`p-1.5 theme-hover rounded flex-shrink-0 ${panesLocked ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}
+                    title={panesLocked ? "Unlock pane positions" : "Lock pane positions"}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {panesLocked ? (
+                            <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>
+                        ) : (
+                            <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></>
+                        )}
+                    </svg>
+                </button>
+            )}
+
+            {/* Close button - right side (hidden when locked) */}
+            {!hideCloseButton && !panesLocked && (
                 <button
                     onClick={(e) => { e.stopPropagation(); onClose?.(); }}
                     onMouseDown={(e) => e.stopPropagation()}

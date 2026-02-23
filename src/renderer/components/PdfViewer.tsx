@@ -647,6 +647,8 @@ const PdfViewer = ({
     useEffect(() => {
         const handleRefresh = (e: CustomEvent) => {
             if (e.detail?.pdfPath === filePath) {
+                // Invalidate cache so we reload from disk
+                pdfBufferCache.delete(filePath);
                 setRefreshTrigger((prev) => prev + 1);
             }
         };
@@ -964,8 +966,11 @@ const PdfViewer = ({
     }, []);
 
 
+    // Track file mtime to detect external changes (e.g. LaTeX recompile)
+    const lastMtimeRef = useRef<number | null>(null);
+
     useEffect(() => {
-        let currentBlobUrl = null;
+        let currentBlobUrl: string | null = null;
 
         if (!filePath) {
             setPdfData(null);
@@ -973,15 +978,19 @@ const PdfViewer = ({
             return;
         }
 
-        const loadFile = async () => {
+        const loadFile = async (forceReload = false) => {
             setError(null);
             try {
-                // Check global cache first
-                const cachedBuffer = pdfBufferCache.get(filePath);
-                if (cachedBuffer) {
-                    currentBlobUrl = URL.createObjectURL(new Blob([cachedBuffer], { type: 'application/pdf' }));
-                    setPdfData(currentBlobUrl);
-                    return;
+                // Check global cache first (skip if forced reload)
+                if (!forceReload) {
+                    const cachedBuffer = pdfBufferCache.get(filePath);
+                    if (cachedBuffer) {
+                        currentBlobUrl = URL.createObjectURL(new Blob([cachedBuffer], { type: 'application/pdf' }));
+                        setPdfData(currentBlobUrl);
+                        return;
+                    }
+                } else {
+                    pdfBufferCache.delete(filePath);
                 }
 
                 const buffer = await (window as any).api.readFile(filePath);
@@ -991,9 +1000,10 @@ const PdfViewer = ({
                 }
                 // Cache globally
                 cachePdfBuffer(filePath, buffer);
+                if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
                 currentBlobUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
                 setPdfData(currentBlobUrl);
-            } catch (err) {
+            } catch (err: any) {
                 console.error('[PdfViewer] Error loading PDF:', err);
                 setError(err.message);
             }
@@ -1001,7 +1011,21 @@ const PdfViewer = ({
 
         loadFile();
 
+        // Poll for file changes (mtime) every 2 seconds
+        const pollInterval = setInterval(async () => {
+            try {
+                const stat = await (window as any).api?.getFileStats?.(filePath);
+                if (stat?.mtimeMs) {
+                    if (lastMtimeRef.current !== null && stat.mtimeMs !== lastMtimeRef.current) {
+                        loadFile(true);
+                    }
+                    lastMtimeRef.current = stat.mtimeMs;
+                }
+            } catch {}
+        }, 2000);
+
         return () => {
+            clearInterval(pollInterval);
             if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
         };
     }, [filePath, refreshTrigger, nodeId]);

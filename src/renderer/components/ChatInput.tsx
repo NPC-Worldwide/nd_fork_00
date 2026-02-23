@@ -177,6 +177,13 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
     const jinxSearchRef = useRef<HTMLInputElement>(null);
 
     // KG/Memory search toggles
+    const [disableThinking, setDisableThinking] = useState(() => {
+        try { return localStorage.getItem('incognide-disable-thinking') === 'true'; } catch { return false; }
+    });
+    useEffect(() => {
+        try { localStorage.setItem('incognide-disable-thinking', String(disableThinking)); } catch {}
+    }, [disableThinking]);
+
     const [useKgSearch, setUseKgSearch] = useState(() => {
         try { return localStorage.getItem('incognide-use-kg-search') === 'true'; } catch { return false; }
     });
@@ -920,7 +927,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                     if (shouldBroadcast) {
                                         onBroadcast(selectedModels, selectedNPCs);
                                     } else {
-                                        handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, genParams });
+                                        handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, disableThinking, genParams });
                                         setUsedVoiceInput(false);
                                     }
                                     setIsInputExpanded(false);
@@ -944,7 +951,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                 if (shouldBroadcast) {
                                     onBroadcast(selectedModels, selectedNPCs);
                                 } else {
-                                    handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, genParams });
+                                    handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, disableThinking, genParams });
                                     setUsedVoiceInput(false);
                                 }
                                 setIsInputExpanded(false);
@@ -973,7 +980,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
             />
 
             <div
-                className="relative theme-bg-primary theme-border border rounded-lg group h-full flex flex-col m-2 overflow-visible z-[9999]"
+                className="relative theme-bg-primary theme-border border rounded-lg group h-full flex flex-col m-2 overflow-visible z-[10]"
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsHovering(true); }}
                 onDragEnter={(e) => { e.stopPropagation(); setIsHovering(true); }}
                 onDragLeave={(e) => { e.stopPropagation(); setIsHovering(false); }}
@@ -1080,7 +1087,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                                 if (shouldBroadcast) {
                                                     onBroadcast(selectedModels, selectedNPCs);
                                                 } else {
-                                                    handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, genParams });
+                                                    handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, disableThinking, genParams });
                                                     setUsedVoiceInput(false);
                                                 }
                                             }
@@ -1201,7 +1208,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                     if (shouldBroadcast && canSend) {
                                         onBroadcast(selectedModels, selectedNPCs);
                                     } else {
-                                        handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, genParams });
+                                        handleInputSubmit(e, { voiceInput: usedVoiceInput, useKgSearch, useMemorySearch, disableThinking, genParams });
                                         setUsedVoiceInput(false);
                                     }
                                 }}
@@ -1249,25 +1256,25 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                             <ChevronDown size={12} className={`transition-transform flex-shrink-0 ${showJinxDropdown ? 'rotate-180' : ''}`} />
                         </button>
                         {showJinxDropdown && (
-                            <div className="absolute z-[100] left-0 right-0 bottom-full mb-1 bg-black/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl overflow-hidden w-64">
-                                <div className="px-2 py-1.5 border-b border-white/5">
+                            <div className="absolute z-[100] left-0 right-0 bottom-full mb-1 theme-bg-primary backdrop-blur-xl border theme-border rounded-lg shadow-2xl overflow-hidden w-64">
+                                <div className="px-2 py-1.5 border-b theme-border">
                                     <input
                                         ref={jinxSearchRef}
                                         type="text"
                                         value={jinxSearch}
                                         onChange={(e) => setJinxSearch(e.target.value)}
                                         placeholder="Search modes & jinxs..."
-                                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                                        className="w-full theme-input rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500/50"
                                         onKeyDown={(e) => e.stopPropagation()}
                                     />
                                 </div>
                                 <div className="max-h-64 overflow-y-auto">
                                     {!jinxSearch.trim() && (
-                                        <div className="p-1 border-b border-white/5">
-                                            <div className="px-2 py-1.5 text-xs rounded cursor-pointer flex items-center gap-2 hover:bg-cyan-500/20 transition-colors" onClick={() => { setExecutionMode('chat'); setSelectedJinx(null); setShowJinxDropdown(false); }}>
+                                        <div className="p-1 border-b theme-border">
+                                            <div className="px-2 py-1.5 text-xs rounded cursor-pointer flex items-center gap-2 theme-hover transition-colors theme-text-primary" onClick={() => { setExecutionMode('chat'); setSelectedJinx(null); setShowJinxDropdown(false); }}>
                                                 <span>💬</span><span>Chat</span>
                                             </div>
-                                            <div className="px-2 py-1.5 text-xs rounded cursor-pointer flex items-center gap-2 hover:bg-amber-500/20 transition-colors" onClick={() => { setExecutionMode('tool_agent'); setSelectedJinx(null); setShowJinxDropdown(false); }}>
+                                            <div className="px-2 py-1.5 text-xs rounded cursor-pointer flex items-center gap-2 theme-hover transition-colors theme-text-primary" onClick={() => { setExecutionMode('tool_agent'); setSelectedJinx(null); setShowJinxDropdown(false); }}>
                                                 <span>🛠</span><span>Agent</span>
                                             </div>
                                         </div>
@@ -1275,9 +1282,9 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                     {jinxSearch.trim() ? (
                                         <div className="p-1">
                                             {filteredJinxs.length > 0 ? filteredJinxs.map((jinx: any) => (
-                                                <div key={jinx.name} className="px-2 py-1.5 text-xs hover:bg-purple-500/20 rounded cursor-pointer transition-colors flex items-center justify-between" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>
+                                                <div key={jinx.name} className="px-2 py-1.5 text-xs theme-hover rounded cursor-pointer transition-colors flex items-center justify-between theme-text-primary" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>
                                                     <span>{jinx.name}</span>
-                                                    <span className="text-[9px] text-gray-600">{jinx.group}</span>
+                                                    <span className="text-[9px] theme-text-muted">{jinx.group}</span>
                                                 </div>
                                             )) : (
                                                 <div className="px-2 py-3 text-xs text-gray-500 text-center">No matches for "{jinxSearch}"</div>
@@ -1289,14 +1296,14 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                             if (!originJinxs.length) return null;
                                             const grouped = originJinxs.reduce((acc: any, j: any) => { const g = j.group || 'root'; if (!acc[g]) acc[g] = []; acc[g].push(j); return acc; }, {});
                                             return (
-                                                <div key={origin} className="border-t border-white/5">
-                                                    <div className="px-2 py-1 text-[9px] uppercase text-gray-500">{origin === 'project' ? '📁 Project' : '🌐 Global'}</div>
+                                                <div key={origin} className="border-t theme-border">
+                                                    <div className="px-2 py-1 text-[9px] uppercase theme-text-muted">{origin === 'project' ? '📁 Project' : '🌐 Global'}</div>
                                                     {Object.entries(grouped).filter(([g]) => g.toLowerCase() !== 'modes').sort(([a], [b]) => a.localeCompare(b)).map(([gName, jinxs]: [string, any]) => (
                                                         <details key={`${origin}-${gName}`} className="px-1">
-                                                            <summary className="px-2 py-1 text-xs cursor-pointer flex items-center gap-1 hover:bg-white/5 rounded"><FolderTree size={10} className="text-purple-400" /> {gName}</summary>
+                                                            <summary className="px-2 py-1 text-xs cursor-pointer flex items-center gap-1 theme-hover rounded theme-text-primary"><FolderTree size={10} className="text-purple-400" /> {gName}</summary>
                                                             <div className="pl-4 pb-1">
                                                                 {jinxs.sort((a: any, b: any) => a.name.localeCompare(b.name)).map((jinx: any) => (
-                                                                    <div key={jinx.name} className="px-2 py-1 text-xs hover:bg-purple-500/20 rounded cursor-pointer transition-colors" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>{jinx.name}</div>
+                                                                    <div key={jinx.name} className="px-2 py-1 text-xs theme-hover rounded cursor-pointer transition-colors theme-text-primary" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>{jinx.name}</div>
                                                                 ))}
                                                             </div>
                                                         </details>
@@ -1656,8 +1663,27 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                         </div>
                     )}
 
-                    {/* KG/Memory toggles */}
+                    {/* Thinking / KG / Memory toggles */}
                     <div className="flex items-center gap-0.5 pl-1 border-l border-white/10 ml-1">
+                        {/* Thinking toggle - only for models that support it */}
+                        {(() => {
+                            const m = currentModel?.toLowerCase() || '';
+                            const supportsThinking = m.includes('claude') || m.includes('deepseek-r1') || m.includes('o1') || m.includes('o3') || m.includes('qwq');
+                            if (!supportsThinking) return null;
+                            return (
+                                <button
+                                    onClick={() => setDisableThinking(!disableThinking)}
+                                    className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${
+                                        !disableThinking
+                                            ? 'bg-gradient-to-br from-violet-500/30 to-purple-600/30 text-violet-300 border border-violet-500/40'
+                                            : 'bg-white/5 text-gray-500 border border-white/10 hover:text-gray-300 hover:bg-white/10'
+                                    }`}
+                                    title={disableThinking ? "Thinking disabled — click to enable" : "Thinking enabled — click to disable"}
+                                >
+                                    <BrainCircuit size={14} />
+                                </button>
+                            );
+                        })()}
                         <button
                             onClick={() => setUseKgSearch(!useKgSearch)}
                             className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${

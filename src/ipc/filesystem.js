@@ -558,12 +558,24 @@ function register(ctx) {
       const bib = spawnSync('bibtex', [base], { encoding: 'utf8', cwd: workingDir });
       console.log('[LATEX] Bibtex stdout:', bib.stdout);
       console.log('[LATEX] Bibtex stderr:', bib.stderr);
+
+      // biber support (for biblatex with backend=biber)
+      if (bib.status !== 0) {
+        console.log('[LATEX] bibtex failed, trying biber...');
+        const biber = spawnSync('biber', [base], { encoding: 'utf8', cwd: workingDir });
+        console.log('[LATEX] Biber stdout:', biber.stdout);
+        console.log('[LATEX] Biber stderr:', biber.stderr);
+      }
     }
 
     console.log('[LATEX] Running second pass:', engine, compileArgs, 'in', workingDir);
+    spawnSync(engine, compileArgs, { encoding: 'utf8', cwd: workingDir });
+
+    // Third pass for cross-references
+    console.log('[LATEX] Running third pass:', engine, compileArgs, 'in', workingDir);
     const result = spawnSync(engine, compileArgs, { encoding: 'utf8', cwd: workingDir });
-    console.log('[LATEX] Second pass stdout:', result.stdout);
-    console.log('[LATEX] Second pass stderr:', result.stderr);
+    console.log('[LATEX] Third pass stdout:', result.stdout);
+    console.log('[LATEX] Third pass stderr:', result.stderr);
 
     const pdfPath = texPath.replace(/\.tex$/, '.pdf');
     const ok = result.status === 0;
@@ -573,7 +585,8 @@ function register(ctx) {
     return {
       ok,
       pdfPath,
-      error: !ok ? result.stderr : null
+      log: result.stdout || '',
+      error: !ok ? (result.stderr || result.stdout) : null
     };
   });
 
@@ -976,6 +989,10 @@ function register(ctx) {
 
   ipcMain.handle('getHomeDir', async () => {
     return os.homedir();
+  });
+
+  ipcMain.handle('getNpcshHome', async () => {
+    return ctx.NPCSH_BASE || path.join(os.homedir(), '.npcsh');
   });
 
   ipcMain.handle('readDirectory', async (_, dir) => {

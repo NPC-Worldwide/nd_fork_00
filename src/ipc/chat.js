@@ -460,6 +460,13 @@ function register(ctx) {
         assistantMessageId: data.assistantMessageId,
         // For sub-branches: the parent of the user message (points to an assistant message)
         userParentMessageId: data.userParentMessageId,
+        // Generation parameters
+        temperature: data.temperature,
+        top_p: data.top_p,
+        top_k: data.top_k,
+        max_tokens: data.max_tokens,
+        // Thinking control
+        disableThinking: data.disableThinking || false,
       };
 
       const response = await fetch(apiUrl, {
@@ -829,6 +836,9 @@ function register(ctx) {
             ch.tool_calls,
             ch.tool_results,
             ch.parent_message_id,
+            ch.input_tokens,
+            ch.output_tokens,
+            ch.cost,
             json_group_array(
                 json_object(
                     'id', ma.id,
@@ -899,7 +909,10 @@ function register(ctx) {
                 reasoningContent: row.reasoning_content,
                 toolCalls,
                 toolResults,
-                parentMessageId: row.parent_message_id
+                parentMessageId: row.parent_message_id,
+                input_tokens: row.input_tokens || 0,
+                output_tokens: row.output_tokens || 0,
+                cost: row.cost ? parseFloat(row.cost) : null,
             };
             delete newRow.attachments_json;
             delete newRow.reasoning_content;

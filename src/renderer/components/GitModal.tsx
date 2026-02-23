@@ -325,15 +325,18 @@ const GitModal: React.FC<GitModalProps> = ({
                                 </div>
                             </div>
 
-                            {/* Branch List */}
+                            {/* Local Branches */}
                             <div className="theme-bg-secondary rounded-lg p-3">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-sm font-medium theme-text-primary">Branches</h3>
+                                    <h3 className="text-sm font-medium theme-text-primary flex items-center gap-2">
+                                        Local Branches
+                                        <span className="text-purple-400 text-xs">({gitBranches?.branches?.filter((b: string) => !b.startsWith('remotes/')).length || 0})</span>
+                                    </h3>
                                     <button onClick={loadGitBranches} className="text-xs theme-text-muted hover:theme-text-primary">Refresh</button>
                                 </div>
                                 {gitBranches?.branches ? (
-                                    <div className="space-y-1 max-h-80 overflow-y-auto">
-                                        {gitBranches.branches.map((branch: string) => (
+                                    <div className="space-y-1 max-h-60 overflow-y-auto">
+                                        {gitBranches.branches.filter((branch: string) => !branch.startsWith('remotes/')).map((branch: string) => (
                                             <div
                                                 key={branch}
                                                 className={`flex items-center justify-between p-2 rounded text-sm ${
@@ -373,6 +376,33 @@ const GitModal: React.FC<GitModalProps> = ({
                                     <div className="text-center theme-text-muted py-4">Loading branches...</div>
                                 )}
                             </div>
+
+                            {/* Remote Branches */}
+                            {gitBranches?.branches?.some((b: string) => b.startsWith('remotes/')) && (
+                                <div className="theme-bg-secondary rounded-lg p-3">
+                                    <h3 className="text-sm font-medium theme-text-primary mb-2 flex items-center gap-2">
+                                        Remote Branches
+                                        <span className="text-orange-400 text-xs">({gitBranches.branches.filter((b: string) => b.startsWith('remotes/')).length})</span>
+                                    </h3>
+                                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                                        {gitBranches.branches.filter((branch: string) => branch.startsWith('remotes/')).map((branch: string) => (
+                                            <div
+                                                key={branch}
+                                                className="flex items-center justify-between p-2 rounded text-sm hover:bg-white/5"
+                                            >
+                                                <span className="theme-text-muted text-xs">{branch.replace('remotes/', '')}</span>
+                                                <button
+                                                    onClick={() => gitCheckoutBranch(branch.replace('remotes/origin/', ''))}
+                                                    disabled={gitLoading}
+                                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                                >
+                                                    Checkout
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {gitError && <div className="text-red-500 text-xs">{gitError}</div>}
                             {noUpstreamPrompt && (
                                 <div className="mt-2 p-2 bg-amber-900/30 border border-amber-600/50 rounded text-xs">
