@@ -135,6 +135,14 @@ export function useLayoutManager({ trackActivity, openModeRef }: UseLayoutManage
             } catch (err: any) {
                 paneData.fileContent = `Error loading file: ${err.message}`;
             }
+            // Sync loaded content to the active tab so it persists across tab switches
+            if (paneData.tabs && Array.isArray(paneData.tabs)) {
+                const activeTabIndex = paneData.activeTabIndex ?? 0;
+                if (paneData.tabs[activeTabIndex] && paneData.tabs[activeTabIndex].contentId === newContentId) {
+                    paneData.tabs[activeTabIndex].fileContent = paneData.fileContent;
+                    paneData.tabs[activeTabIndex].fileChanged = paneData.fileChanged;
+                }
+            }
         } else if (newContentType === 'browser') {
             paneData.chatMessages = null;
             paneData.fileContent = null;
@@ -197,6 +205,16 @@ export function useLayoutManager({ trackActivity, openModeRef }: UseLayoutManage
                     paneData.chatMessages.messages = [];
                     paneData.chatMessages.allMessages = [];
                     paneData.chatStats = getConversationStats([]);
+                }
+            }
+            // Sync loaded chat state to the active tab so it persists across tab switches
+            if (paneData.tabs && Array.isArray(paneData.tabs)) {
+                const activeTabIndex = paneData.activeTabIndex ?? 0;
+                if (paneData.tabs[activeTabIndex] && paneData.tabs[activeTabIndex].contentId === newContentId) {
+                    paneData.tabs[activeTabIndex].chatMessages = paneData.chatMessages;
+                    paneData.tabs[activeTabIndex].executionMode = paneData.executionMode;
+                    paneData.tabs[activeTabIndex].selectedJinx = paneData.selectedJinx;
+                    paneData.tabs[activeTabIndex].chatStats = paneData.chatStats;
                 }
             }
         } else if (newContentType === 'terminal' || newContentType === 'pdf') {

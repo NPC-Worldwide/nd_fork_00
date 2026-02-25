@@ -1,9 +1,9 @@
 {
   "name": "incognide",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Explore the unknown, build the future, own your data.",
   "author": "Chris Agostino <info@npcworldwi.de>",
-  "main": "src/main.js", 
+  "main": "src/main.js",
   "files": [
     "bin/cli.js",
     "dist/index.html",
@@ -151,7 +151,9 @@
     "protocols": [
       {
         "name": "Incognide URL",
-        "schemes": ["incognide"]
+        "schemes": [
+          "incognide"
+        ]
       }
     ]
   },
@@ -174,6 +176,7 @@
     "@react-pdf-viewer/highlight": "^3.12.0",
     "@react-pdf-viewer/selection-mode": "^3.12.0",
     "@react-pdf-viewer/zoom": "^3.12.0",
+    "@replit/codemirror-vim": "^6.3.0",
     "@supabase/supabase-js": "^2.47.15",
     "@uiw/codemirror-theme-github": "^4.24.1",
     "@uiw/codemirror-theme-vscode": "^4.24.1",

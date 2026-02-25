@@ -9,6 +9,36 @@ const SHELL_PROMPT_KEY = 'incognide-shell-profile-prompted';
 // Maximum lines to keep in the terminal output buffer for chat context
 const MAX_TERMINAL_CONTEXT_LINES = 100;
 
+// Smart selection that joins soft-wrapped lines into continuous text.
+// xterm pads lines to full column width and inserts \n at visual wrap boundaries.
+// This checks the buffer's isWrapped flag to distinguish soft wraps (terminal width)
+// from hard newlines (actual line breaks), joining the former.
+function getSmartSelection(term: Terminal): string {
+    const selection = term.getSelection();
+    if (!selection) return '';
+
+    const selPos = term.getSelectionPosition();
+    if (!selPos) return selection;
+
+    const buffer = term.buffer.active;
+    const rawLines = selection.split('\n');
+    const result: string[] = [];
+
+    for (let i = 0; i < rawLines.length; i++) {
+        const bufferY = selPos.start.y + i;
+        const bufferLine = buffer.getLine(bufferY);
+
+        if (i > 0 && bufferLine?.isWrapped) {
+            // Soft-wrapped continuation — trim trailing pad spaces and join
+            result[result.length - 1] = result[result.length - 1].replace(/\s+$/, '') + rawLines[i];
+        } else {
+            result.push(rawLines[i]);
+        }
+    }
+
+    return result.join('\n');
+}
+
 // Theme presets with actual hex color values
 const THEME_PRESETS = {
     'default': {
@@ -248,7 +278,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
 
     const handleCopy = useCallback(() => {
         if (xtermInstance.current) {
-            const selection = xtermInstance.current.getSelection();
+            const selection = getSmartSelection(xtermInstance.current);
             if (selection) {
                 navigator.clipboard.writeText(selection);
             }
@@ -471,7 +501,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
 
                 // Ctrl+C (not Cmd+C on Mac) - send SIGINT
                 if (event.ctrlKey && !event.metaKey && !event.shiftKey && key === 'c') {
-                    const selection = term.getSelection();
+                    const selection = getSmartSelection(term);
                     if (selection) {
                         navigator.clipboard.writeText(selection);
                         return false;
@@ -501,7 +531,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
                 // Ctrl+Shift+C or Cmd+Shift+C for copy (terminal standard)
                 if (isMeta && event.shiftKey && key === 'c') {
                     event.stopPropagation();
-                    const selection = term.getSelection();
+                    const selection = getSmartSelection(term);
                     if (selection) {
                         navigator.clipboard.writeText(selection);
                     }
@@ -510,7 +540,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
 
                 // Cmd+C (Mac) - copy if selection exists
                 if (event.metaKey && !event.ctrlKey && !event.shiftKey && key === 'c') {
-                    const selection = term.getSelection();
+                    const selection = getSmartSelection(term);
                     if (selection) {
                         navigator.clipboard.writeText(selection);
                         return false;
