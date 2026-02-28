@@ -3637,7 +3637,24 @@ const renderFolderList = (structure) => {
                     >
                         <button
                             draggable={!isInaccessible}
-                            onDragStart={(e) => { if (isInaccessible) { e.preventDefault(); return; } e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('application/json', JSON.stringify({ type: 'folder', id: fullPath })); handleGlobalDragStart(e, { type: 'folder', id: fullPath }); }}
+                            
+onDragStart={(e) => {
+    if (isInaccessible) { e.preventDefault(); return; }
+    e.dataTransfer.effectAllowed = 'copyMove';
+    
+    // Ensure we always use the absolute path
+    const absolutePath = fullPath.startsWith('/') ? fullPath : `${currentPath}/${fullPath}`;
+    
+    e.dataTransfer.setData('application/json', JSON.stringify({ 
+        type: 'folder', 
+        id: absolutePath  // ← was: fullPath
+    }));
+    handleGlobalDragStart(e, { 
+        type: 'folder', 
+        id: absolutePath  // ← was: fullPath
+    });
+}}
+                            
                             onDragEnd={handleGlobalDragEnd}
                             onClick={(e) => {
                                 if (isInaccessible) return; // Don't allow expanding inaccessible folders
