@@ -118,7 +118,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     {
         selector: '[data-tutorial="cron-button"]',
         title: 'Assembly Line',
-        description: 'Schedule recurring tasks with cron jobs, run persistent daemons, and manage SQL models. Assign NPC agents or jinxs to automate workflows on a schedule.',
+        description: 'Schedule recurring tasks with cron jobs, run persistent daemons, and manage SQL models. Assign NPC agents or jinxes to automate workflows on a schedule.',
         paths: ['cloud-ai', 'local-ai'],
         position: 'bottom',
     },
@@ -176,14 +176,14 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     {
         selector: '[data-tutorial="npc-team-button"]',
         title: 'NPCs',
-        description: 'Your AI agents — each NPC has a personality, model, and specialized jinxs (tools). Ledbi (pronounced like Irish "Levi") is your default UI assistant. Add, edit, or remove NPCs to build your ideal team.',
+        description: 'Your AI agents — each NPC has a personality, model, and specialized jinxes (tools). Ledbi (pronounced like Irish "Levi") is your default UI assistant. Add, edit, or remove NPCs to build your ideal team.',
         paths: ['cloud-ai', 'local-ai'],
         position: 'top',
     },
     {
-        selector: '[data-tutorial="jinxs-button"]',
-        title: 'Jinxs',
-        description: 'Jinxs are tools your NPCs can use — function calls, API integrations, UI actions, and custom scripts. Browse, create, and assign jinxs to NPCs from here.',
+        selector: '[data-tutorial="jinxes-button"]',
+        title: 'Jinxes',
+        description: 'Jinxes are tools your NPCs can use — function calls, API integrations, UI actions, and custom scripts. Browse, create, and assign jinxes to NPCs from here.',
         paths: ['cloud-ai', 'local-ai'],
         position: 'top',
     },

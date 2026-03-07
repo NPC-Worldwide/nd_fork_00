@@ -121,7 +121,7 @@ const NotebookViewer = ({
 
     const [availableModels, setAvailableModels] = useState<any[]>([]);
     const [availableNPCs, setAvailableNPCs] = useState<any[]>([]);
-    const [availableJinxs, setAvailableJinxs] = useState<any[]>([]);
+    const [availableJinxes, setAvailableJinxes] = useState<any[]>([]);
     const [showAddCellMenu, setShowAddCellMenu] = useState<number | null>(null);
 
     const [showVariablesPanel, setShowVariablesPanel] = useState(true);
@@ -270,9 +270,9 @@ const NotebookViewer = ({
                     setAvailableNPCs(npcsResult.npcs);
                 }
 
-                const jinxsResult = await (window as any).api.loadJinxs?.({ currentPath: workspacePath });
-                if (jinxsResult?.jinxs) {
-                    setAvailableJinxs(jinxsResult.jinxs);
+                const jinxesResult = await (window as any).api.loadJinxes?.({ currentPath: workspacePath });
+                if (jinxesResult?.jinxes) {
+                    setAvailableJinxes(jinxesResult.jinxes);
                 }
             } catch (e) {
                 console.error('Failed to load notebook resources:', e);
@@ -1633,7 +1633,7 @@ except Exception as e:
                                         className="text-[10px] bg-gray-700 border-none rounded px-1 py-0.5 text-orange-300"
                                     >
                                         <option value="">Select jinx...</option>
-                                        {availableJinxs.map(j => (
+                                        {availableJinxes.map(j => (
                                             <option key={j.name} value={j.name}>{j.name}</option>
                                         ))}
                                     </select>

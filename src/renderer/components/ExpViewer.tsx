@@ -88,7 +88,7 @@ interface ExpViewerProps {
     currentPath: string;
     modelsToDisplay?: any[];
     availableNPCs?: any[];
-    jinxsToDisplay?: any[];
+    jinxesToDisplay?: any[];
 }
 
 const DEFAULT_SECTIONS: ExpSection[] = [
@@ -127,7 +127,7 @@ const ExpViewer: React.FC<ExpViewerProps> = ({
     currentPath,
     modelsToDisplay = [],
     availableNPCs = [],
-    jinxsToDisplay = [],
+    jinxesToDisplay = [],
 }) => {
     const [expData, setExpData] = useState<ExpFile | null>(null);
     const [activeSection, setActiveSection] = useState<string>('hypothesis');
@@ -659,7 +659,7 @@ const ExpViewer: React.FC<ExpViewerProps> = ({
                             className="bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-gray-300"
                         >
                             <option value="">Select Jinx...</option>
-                            {jinxsToDisplay.map((j: any) => (
+                            {jinxesToDisplay.map((j: any) => (
                                 <option key={j.name} value={j.name}>{j.name}</option>
                             ))}
                         </select>

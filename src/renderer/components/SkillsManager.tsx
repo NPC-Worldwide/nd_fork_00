@@ -150,7 +150,7 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ currentPath, embedded = t
         setLoading(true);
         setError(null);
         try {
-            const result = await (window as any).api.getJinxsAllTeams(currentPath);
+            const result = await (window as any).api.getJinxesAllTeams(currentPath);
             if (result?.error) setError(result.error);
             setJinxesByTeam({
                 npcsh: result?.npcsh || [],
@@ -783,10 +783,10 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ currentPath, embedded = t
                     </div>
                     {importResult.imported && (
                         <div className="grid grid-cols-2 gap-1 text-[10px]">
-                            {importResult.imported.jinxs > 0 && (
+                            {importResult.imported.jinxes > 0 && (
                                 <div className="theme-text-secondary">
                                     <Zap size={9} className="inline text-yellow-400 mr-1" />
-                                    {importResult.imported.jinxs} jinxes
+                                    {importResult.imported.jinxes} jinxes
                                 </div>
                             )}
                             {importResult.imported.npcs > 0 && (

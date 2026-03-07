@@ -352,8 +352,8 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     const [macroText, setMacroText] = useState('');
     const [promptModal, setPromptModal] = useState<{ isOpen: boolean; title: string; message: string; defaultValue: string; onConfirm: ((value: string) => void) | null }>({ isOpen: false, title: '', message: '', defaultValue: '', onConfirm: null });
     const [promptModalValue, setPromptModalValue] = useState('');
-    const [initModal, setInitModal] = useState<{ isOpen: boolean; loading: boolean; npcs: any[]; jinxs: any[]; tab: 'npcs' | 'jinxs'; initializing: boolean }>({
-        isOpen: false, loading: false, npcs: [], jinxs: [], tab: 'npcs', initializing: false
+    const [initModal, setInitModal] = useState<{ isOpen: boolean; loading: boolean; npcs: any[]; jinxes: any[]; tab: 'npcs' | 'jinxes'; initializing: boolean }>({
+        isOpen: false, loading: false, npcs: [], jinxes: [], tab: 'npcs', initializing: false
     });
     const screenshotHandlingRef = useRef(false);
     const fileInputRef = useRef(null);
@@ -731,9 +731,9 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     const [isInputExpanded, setIsInputExpanded] = useState(false);
 
 
-    const [availableJinxs, setAvailableJinxs] = useState([]); // [{name, description, path, origin, group}]
-    const [favoriteJinxs, setFavoriteJinxs] = useState(new Set());
-    const [showAllJinxs, setShowAllJinxs] = useState(false);
+    const [availableJinxes, setAvailableJinxes] = useState([]); // [{name, description, path, origin, group}]
+    const [favoriteJinxes, setFavoriteJinxes] = useState(new Set());
+    const [showAllJinxes, setShowAllJinxes] = useState(false);
     const [showJinxDropdown, setShowJinxDropdown] = useState(false);
 
     const [contextHash, setContextHash] = useState('');
@@ -1290,10 +1290,10 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     );
 
 
-    const jinxsToDisplay = useMemo(() => {
-        if (favoriteJinxs.size === 0 || showAllJinxs) return availableJinxs;
-        return availableJinxs.filter(j => favoriteJinxs.has(j.name));
-    }, [availableJinxs, favoriteJinxs, showAllJinxs]);
+    const jinxesToDisplay = useMemo(() => {
+        if (favoriteJinxes.size === 0 || showAllJinxes) return availableJinxes;
+        return availableJinxes.filter(j => favoriteJinxes.has(j.name));
+    }, [availableJinxes, favoriteJinxes, showAllJinxes]);
 
     useEffect(() => {
         const saveCurrentWorkspace = () => {
@@ -1327,17 +1327,17 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         fetchOllamaToolModels();
     }, []);
 
-    // In ChatInterface.jsx, update the useEffect that fetches Jinxs
+    // In ChatInterface.jsx, update the useEffect that fetches Jinxes
     useEffect(() => {
-        const fetchJinxs = async () => {
+        const fetchJinxes = async () => {
             try {
-                const globalResp = await window.api.getJinxsGlobal(); // { jinxs: [...] }
-                let projectResp = { jinxs: [] };
+                const globalResp = await window.api.getJinxesGlobal(); // { jinxes: [...] }
+                let projectResp = { jinxes: [] };
                 if (currentPath) {
                     try {
-                        projectResp = await window.api.getJinxsProject(currentPath); // { jinxs: [...] }
+                        projectResp = await window.api.getJinxesProject(currentPath); // { jinxes: [...] }
                     } catch (e) {
-                        console.warn('Project jinxs fetch failed:', e?.message || e);
+                        console.warn('Project jinxes fetch failed:', e?.message || e);
                     }
                 }
 
@@ -1365,8 +1365,8 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                     }).filter(Boolean);
 
                 const merged = [
-                    ...normalize(projectResp.jinxs, 'project'),
-                    ...normalize(globalResp.jinxs, 'global'),
+                    ...normalize(projectResp.jinxes, 'project'),
+                    ...normalize(globalResp.jinxes, 'global'),
                 ];
 
                 // Deduplicate by name, prefer project over global (project entries come first)
@@ -1379,15 +1379,15 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                     deduped.push(j);
                 }
 
-                setAvailableJinxs(deduped);
+                setAvailableJinxes(deduped);
             } catch (err) {
-                console.error('Error fetching jinxs:', err);
+                console.error('Error fetching jinxes:', err);
                 setJinxLoadingError(err.message);
-                setAvailableJinxs([]);
+                setAvailableJinxes([]);
             }
         };
 
-        fetchJinxs();
+        fetchJinxes();
     }, [currentPath]);
 
     // Load MCP tools when in Tool Agent mode or when server path changes
@@ -3081,10 +3081,10 @@ const renderExpViewer = useCallback(({ nodeId }) => {
             currentPath={currentPath}
             modelsToDisplay={modelsToDisplay}
             availableNPCs={availableNPCs}
-            jinxsToDisplay={jinxsToDisplay}
+            jinxesToDisplay={jinxesToDisplay}
         />
     );
-}, [currentPath, modelsToDisplay, availableNPCs, jinxsToDisplay]);
+}, [currentPath, modelsToDisplay, availableNPCs, jinxesToDisplay]);
 
 const renderZipViewer = useCallback(({ nodeId }) => {
     return (
@@ -3429,10 +3429,10 @@ const renderCronDaemonPane = useCallback(({ nodeId }: { nodeId: string }) => {
             isPane={true}
             currentPath={currentPathRef.current}
             npcList={availableNPCs}
-            jinxList={availableJinxs}
+            jinxList={availableJinxes}
         />
     );
-}, [availableNPCs, availableJinxs]);
+}, [availableNPCs, availableJinxes]);
 
 // Markdown Preview Component (needs to be a proper component for hooks)
 const MarkdownPreviewContent: React.FC<{ filePath: string }> = ({ filePath }) => {
@@ -5583,7 +5583,7 @@ ${contextPrompt}`;
                 const npcshStatus = await window.api.npcshCheck();
                 if (npcshStatus && !npcshStatus.error && !npcshStatus.initialized) {
                     // Open init modal and fetch package contents
-                    setInitModal({ isOpen: true, loading: true, npcs: [], jinxs: [], tab: 'npcs', initializing: false });
+                    setInitModal({ isOpen: true, loading: true, npcs: [], jinxes: [], tab: 'npcs', initializing: false });
                     try {
                         const packageContents = await window.api.npcshPackageContents();
                         if (packageContents && !packageContents.error) {
@@ -5591,7 +5591,7 @@ ${contextPrompt}`;
                                 ...prev,
                                 loading: false,
                                 npcs: (packageContents.npcs || []).map((n: any) => ({ ...n, enabled: true })),
-                                jinxs: (packageContents.jinxs || []).map((j: any) => ({ ...j, enabled: true }))
+                                jinxes: (packageContents.jinxes || []).map((j: any) => ({ ...j, enabled: true }))
                             }));
                         } else {
                             console.error('Failed to get package contents:', packageContents?.error);
@@ -6408,10 +6408,10 @@ ${contextPrompt}`;
                 </div>
                 <div>
                     <h2 className="text-lg font-semibold theme-text-primary">Welcome to Incognide</h2>
-                    <p className="text-xs theme-text-muted">Set up your global NPC team with agents and jinxs</p>
+                    <p className="text-xs theme-text-muted">Set up your global NPC team with agents and jinxes</p>
                 </div>
                 <button
-                    onClick={() => setInitModal({ isOpen: false, loading: false, npcs: [], jinxs: [], tab: 'npcs', initializing: false })}
+                    onClick={() => setInitModal({ isOpen: false, loading: false, npcs: [], jinxes: [], tab: 'npcs', initializing: false })}
                     className="ml-auto p-2 theme-hover rounded-lg"
                 >
                     <X size={18} />
@@ -6429,12 +6429,12 @@ ${contextPrompt}`;
                     <Users size={16} /> NPCs ({initModal.npcs.filter(n => n.enabled).length})
                 </button>
                 <button
-                    onClick={() => setInitModal(prev => ({ ...prev, tab: 'jinxs' }))}
+                    onClick={() => setInitModal(prev => ({ ...prev, tab: 'jinxes' }))}
                     className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                        initModal.tab === 'jinxs' ? 'border-yellow-500 text-yellow-400' : 'border-transparent theme-text-muted hover:theme-text-primary'
+                        initModal.tab === 'jinxes' ? 'border-yellow-500 text-yellow-400' : 'border-transparent theme-text-muted hover:theme-text-primary'
                     }`}
                 >
-                    <Wrench size={16} /> Jinxs ({initModal.jinxs.filter(j => j.enabled).length})
+                    <Wrench size={16} /> Jinxes ({initModal.jinxes.filter(j => j.enabled).length})
                 </button>
             </div>
 
@@ -6472,16 +6472,16 @@ ${contextPrompt}`;
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {initModal.jinxs.length === 0 ? (
-                            <p className="text-center theme-text-muted py-8">No jinxs found in package</p>
-                        ) : initModal.jinxs.map((jinx, i) => (
+                        {initModal.jinxes.length === 0 ? (
+                            <p className="text-center theme-text-muted py-8">No jinxes found in package</p>
+                        ) : initModal.jinxes.map((jinx, i) => (
                             <div key={i} className={`p-3 rounded-lg border theme-border flex items-center gap-3 ${jinx.enabled ? 'bg-yellow-500/10' : 'opacity-50'}`}>
                                 <input
                                     type="checkbox"
                                     checked={jinx.enabled}
                                     onChange={() => setInitModal(prev => ({
                                         ...prev,
-                                        jinxs: prev.jinxs.map((j, idx) => idx === i ? { ...j, enabled: !j.enabled } : j)
+                                        jinxes: prev.jinxes.map((j, idx) => idx === i ? { ...j, enabled: !j.enabled } : j)
                                     }))}
                                     className="w-4 h-4 accent-yellow-500"
                                 />
@@ -6498,12 +6498,12 @@ ${contextPrompt}`;
             {/* Footer */}
             <div className="px-6 py-4 border-t theme-border flex justify-between items-center">
                 <div className="text-xs theme-text-muted">
-                    {initModal.npcs.filter(n => n.enabled).length} NPCs, {initModal.jinxs.filter(j => j.enabled).length} jinxs selected
+                    {initModal.npcs.filter(n => n.enabled).length} NPCs, {initModal.jinxes.filter(j => j.enabled).length} jinxes selected
                 </div>
                 <div className="flex gap-3">
                     <button
                         className="px-4 py-2 theme-button theme-hover rounded text-sm"
-                        onClick={() => setInitModal({ isOpen: false, loading: false, npcs: [], jinxs: [], tab: 'npcs', initializing: false })}
+                        onClick={() => setInitModal({ isOpen: false, loading: false, npcs: [], jinxes: [], tab: 'npcs', initializing: false })}
                     >
                         Skip
                     </button>
@@ -6516,7 +6516,7 @@ ${contextPrompt}`;
                             if (result.error) {
                                 console.error('Init failed:', result.error);
                             }
-                            setInitModal({ isOpen: false, loading: false, npcs: [], jinxs: [], tab: 'npcs', initializing: false });
+                            setInitModal({ isOpen: false, loading: false, npcs: [], jinxes: [], tab: 'npcs', initializing: false });
                         }}
                     >
                         {initModal.initializing ? (
@@ -6818,7 +6818,7 @@ ${contextPrompt}`;
                 onClose={() => setCtxEditorOpen(false)}
                 currentPath={currentPath}
                 npcList={availableNPCs.map(npc => ({ name: npc.name, display_name: npc.display_name }))}
-                jinxList={availableJinxs.map(jinx => ({ jinx_name: jinx.name, description: jinx.description }))}
+                jinxList={availableJinxes.map(jinx => ({ jinx_name: jinx.name, description: jinx.description }))}
             />
 
             <TeamManagement
@@ -6827,7 +6827,7 @@ ${contextPrompt}`;
                 currentPath={currentPath}
                 startNewConversation={startNewConversationWithNpc}
                 npcList={availableNPCs.map(npc => ({ name: npc.name, display_name: npc.display_name }))}
-                jinxList={availableJinxs.map(jinx => ({ jinx_name: jinx.name, description: jinx.description }))}
+                jinxList={availableJinxes.map(jinx => ({ jinx_name: jinx.name, description: jinx.description }))}
             />
 
             {/* Git Modal */}
@@ -7148,7 +7148,7 @@ const getChatInputProps = useCallback((paneId: string) => ({
     setExecutionMode: (mode: string) => setPaneExecutionMode(paneId, mode),
     selectedJinx: getPaneSelectedJinx(paneId),
     setSelectedJinx: (jinx: any) => setPaneSelectedJinx(paneId, jinx),
-    jinxInputValues, setJinxInputValues, jinxsToDisplay,
+    jinxInputValues, setJinxInputValues, jinxesToDisplay,
     // Per-pane dropdown state
     showJinxDropdown: getPaneShowJinxDropdown(paneId),
     setShowJinxDropdown: (show: boolean) => setPaneShowJinxDropdown(paneId, show),
@@ -7347,7 +7347,7 @@ const getChatInputProps = useCallback((paneId: string) => ({
     autoIncludeContext, contextPaneOverrides, contentDataRef, paneVersion,
     getPaneExecutionMode, setPaneExecutionMode, getPaneSelectedJinx, setPaneSelectedJinx,
     getPaneShowJinxDropdown, setPaneShowJinxDropdown,
-    jinxInputValues, jinxsToDisplay,
+    jinxInputValues, jinxesToDisplay,
     availableModels, modelsLoading, modelsError, currentModel, currentProvider,
     favoriteModels, showAllModels, modelsToDisplay, ollamaToolModels,
     availableNPCs, npcsLoading, npcsError, currentNPC,
@@ -8700,7 +8700,7 @@ const renderMainContent = () => {
         'memory-manager': 'Memory',
         'photoviewer': 'Photos',
         'npcteam': 'NPCs',
-        'jinx': 'Jinxs',
+        'jinx': 'Jinxes',
         'teammanagement': 'Team',
         'diff': 'Diff',
         'browsergraph': 'Web Graph',

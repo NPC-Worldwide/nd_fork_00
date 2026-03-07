@@ -829,7 +829,7 @@ app.whenReady().then(async () => {
     try {
       fs.mkdirSync(dataPath, { recursive: true });
       fs.mkdirSync(path.join(os.homedir(), '.npcsh', 'npc_team'), { recursive: true });
-      fs.mkdirSync(path.join(os.homedir(), '.npcsh', 'npc_team', 'jinxs'), { recursive: true });
+      fs.mkdirSync(path.join(os.homedir(), '.npcsh', 'npc_team', 'jinxes'), { recursive: true });
       log('Created necessary directories for backend');
     } catch (dirErr) {
       log(`Warning: Could not create directories: ${dirErr.message}`);

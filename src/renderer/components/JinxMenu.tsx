@@ -9,7 +9,7 @@ import AutosizeTextarea from './AutosizeTextarea';
 const JinxMenu = ({ isOpen, onClose, currentPath, embedded = false, isGlobal = true, globalPath = undefined }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [jinxs, setJinxs] = useState([]);
+    const [jinxes, setJinxes] = useState([]);
     const [selectedJinx, setSelectedJinx] = useState(null);
     const [editedJinx, setEditedJinx] = useState(null);
     const [expandedFolders, setExpandedFolders] = useState(new Set());
@@ -28,14 +28,14 @@ const JinxMenu = ({ isOpen, onClose, currentPath, embedded = false, isGlobal = t
     }, [isOpen, onClose]);
 
     useEffect(() => {
-        const loadJinxs = async () => {
+        const loadJinxes = async () => {
             if (!isOpen) return;
             setLoading(true);
             setError(null);
 
             const response = isGlobal
-                ? await window.api.getJinxsGlobal(globalPath)
-                : await window.api.getJinxsProject(currentPath);
+                ? await window.api.getJinxesGlobal(globalPath)
+                : await window.api.getJinxesProject(currentPath);
 
             if (response.error) {
                 setError(response.error);
@@ -43,16 +43,16 @@ const JinxMenu = ({ isOpen, onClose, currentPath, embedded = false, isGlobal = t
                 return;
             }
 
-            setJinxs(response.jinxs || []);
+            setJinxes(response.jinxes || []);
             setLoading(false);
         };
-        loadJinxs();
+        loadJinxes();
     }, [isOpen, isGlobal, currentPath, globalPath]);
 
-    const buildFolderTree = (jinxsList) => {
+    const buildFolderTree = (jinxesList) => {
         const tree = { folders: {}, files: [] };
 
-        for (const jinx of jinxsList) {
+        for (const jinx of jinxesList) {
             const pathParts = (jinx.path || jinx.jinx_name).split('/');
 
             if (pathParts.length === 1) {
@@ -306,15 +306,15 @@ const labelExecution = async (messageId, label) => {
         }
 
         const refreshed = isGlobal
-            ? await window.api.getJinxsGlobal(globalPath)
-            : await window.api.getJinxsProject(currentPath);
-        setJinxs(refreshed.jinxs || []);
+            ? await window.api.getJinxesGlobal(globalPath)
+            : await window.api.getJinxesProject(currentPath);
+        setJinxes(refreshed.jinxes || []);
         setSelectedJinx(editedJinx);
     };
 
     if (!isOpen && !embedded) return null;
 
-    const tree = buildFolderTree(jinxs);
+    const tree = buildFolderTree(jinxes);
 
     const content = (
         <>
@@ -342,12 +342,12 @@ const labelExecution = async (messageId, label) => {
                                 <div className="text-red-400 p-4 text-center">
                                     {error}
                                 </div>
-                            ) : jinxs.length > 0 ? (
+                            ) : jinxes.length > 0 ? (
                                 renderTree(tree)
                             ) : (
                                 <div className="theme-text-secondary text-sm
                                     p-4 text-center">
-                                    No jinxs found.
+                                    No jinxes found.
                                 </div>
                             )}
                         </div>

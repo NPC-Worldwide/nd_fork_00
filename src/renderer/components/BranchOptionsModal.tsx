@@ -8,7 +8,7 @@ interface BranchOptionsModalProps {
     messageContent: string;
     currentModel: string;
     availableModels: any[];
-    availableJinxs?: string[];
+    availableJinxes?: string[];
 }
 
 export interface BranchOptions {
@@ -25,7 +25,7 @@ export const BranchOptionsModal: React.FC<BranchOptionsModalProps> = ({
     messageContent,
     currentModel,
     availableModels,
-    availableJinxs = []
+    availableJinxes = []
 }) => {
     const [mode, setMode] = useState<'same' | 'different' | 'broadcast' | 'jinx'>('same');
     const [selectedModel, setSelectedModel] = useState(currentModel);
@@ -213,20 +213,20 @@ export const BranchOptionsModal: React.FC<BranchOptionsModalProps> = ({
 
                     {mode === 'jinx' && (
                         <div className="ml-11 p-3 theme-bg-secondary rounded-lg">
-                            {availableJinxs.length > 0 ? (
+                            {availableJinxes.length > 0 ? (
                                 <select
                                     value={selectedJinx}
                                     onChange={e => setSelectedJinx(e.target.value)}
                                     className="w-full p-2 rounded theme-bg-tertiary border theme-border text-sm"
                                 >
                                     <option value="">Select a jinx...</option>
-                                    {availableJinxs.map(jinx => (
+                                    {availableJinxes.map(jinx => (
                                         <option key={jinx} value={jinx}>{jinx}</option>
                                     ))}
                                 </select>
                             ) : (
                                 <div className="text-sm text-gray-400">
-                                    No jinxs available. Create jinxs in your npc_team directory.
+                                    No jinxes available. Create jinxes in your npc_team directory.
                                 </div>
                             )}
                         </div>

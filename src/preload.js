@@ -26,7 +26,7 @@ readDocxContent: (filePath) =>
     readDirectoryImages: (dirPath) => ipcRenderer.invoke('readDirectoryImages', dirPath),
     open_directory_picker: () => ipcRenderer.invoke('open_directory_picker'),
 
-    getAvailableJinxs: (params) => ipcRenderer.invoke('getAvailableJinxs', params),
+    getAvailableJinxes: (params) => ipcRenderer.invoke('getAvailableJinxes', params),
     executeJinx: (params) => ipcRenderer.invoke('executeJinx', params),
 
     getAvailableImageModels: (currentPath) => ipcRenderer.invoke('getAvailableImageModels', currentPath),
@@ -489,25 +489,25 @@ onTerminalClosed: (callback) => {
     getBrowserHistory: (folderPath) => ipcRenderer.invoke('get-browser-history', folderPath),
     browserAddToHistory: (data) => ipcRenderer.invoke('browser-add-to-history', data),
 
-    getJinxsGlobal: (globalPath) => ipcRenderer.invoke('get-jinxs-global', globalPath),
-    getJinxsProject: async (currentPath) => {
+    getJinxesGlobal: (globalPath) => ipcRenderer.invoke('get-jinxes-global', globalPath),
+    getJinxesProject: async (currentPath) => {
         try {
-            const response = await fetch(`${BACKEND_URL}/api/jinxs/project?currentPath=${encodeURIComponent(currentPath)}`);
+            const response = await fetch(`${BACKEND_URL}/api/jinxes/project?currentPath=${encodeURIComponent(currentPath)}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
             return data;
         } catch (error) {
-            console.error('Error loading project jinxs:', error);
-            return { jinxs: [], error: error.message };
+            console.error('Error loading project jinxes:', error);
+            return { jinxes: [], error: error.message };
         }
     },
     saveJinx: (data) => ipcRenderer.invoke('save-jinx', data),
     ingestJinx: (data) => ipcRenderer.invoke('ingest-jinx', data),
     deleteJinx: (data) => ipcRenderer.invoke('delete-jinx', data),
     importNpcTeam: (data) => ipcRenderer.invoke('import-npc-team', data),
-    getJinxsAllTeams: (currentPath) => ipcRenderer.invoke('get-jinxs-all-teams', currentPath),
+    getJinxesAllTeams: (currentPath) => ipcRenderer.invoke('get-jinxes-all-teams', currentPath),
 
     getMapsGlobal: async () => {
         try {

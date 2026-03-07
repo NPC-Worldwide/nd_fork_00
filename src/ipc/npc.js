@@ -123,14 +123,14 @@ function register(ctx) {
     }
   })();
 
-  ipcMain.handle('getAvailableJinxs', async (event, { currentPath, npc }) => {
+  ipcMain.handle('getAvailableJinxes', async (event, { currentPath, npc }) => {
     try {
         const params = new URLSearchParams();
         if (currentPath) params.append('currentPath', currentPath);
         if (npc) params.append('npc', npc);
 
-        const url = `${BACKEND_URL}/api/jinxs/available?${params.toString()}`;
-        log('Fetching available jinxs from:', url);
+        const url = `${BACKEND_URL}/api/jinxes/available?${params.toString()}`;
+        log('Fetching available jinxes from:', url);
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -139,11 +139,11 @@ function register(ctx) {
         }
 
         const data = await response.json();
-        log('Received jinxs:', data.jinxs?.length);
+        log('Received jinxes:', data.jinxes?.length);
         return data;
     } catch (err) {
-        log('Error in getAvailableJinxs handler:', err);
-        return { jinxs: [], error: err.message };
+        log('Error in getAvailableJinxes handler:', err);
+        return { jinxes: [], error: err.message };
     }
   });
 
@@ -236,30 +236,30 @@ function register(ctx) {
     }
   });
 
-  ipcMain.handle('get-jinxs-global', async (event, globalPath) => {
+  ipcMain.handle('get-jinxes-global', async (event, globalPath) => {
     try {
         if (globalPath === 'npcsh') {
-            const response = await fetch(`${BACKEND_URL}/api/jinxs/global`);
+            const response = await fetch(`${BACKEND_URL}/api/jinxes/global`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-            return { jinxs: (data.jinxs || []).map(j => ({ ...j, source: 'npcsh' })) };
+            return { jinxes: (data.jinxes || []).map(j => ({ ...j, source: 'npcsh' })) };
         }
 
         const teamPath = globalPath || INCOGNIDE_TEAM_PATH;
-        const response = await fetch(`${BACKEND_URL}/api/jinxs/project?currentPath=${encodeURIComponent(teamPath)}`);
+        const response = await fetch(`${BACKEND_URL}/api/jinxes/project?currentPath=${encodeURIComponent(teamPath)}`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        return { jinxs: (data.jinxs || []).map(j => ({ ...j, source: globalPath ? 'custom' : 'incognide' })) };
+        return { jinxes: (data.jinxes || []).map(j => ({ ...j, source: globalPath ? 'custom' : 'incognide' })) };
     } catch (err) {
-        console.error('Error loading global jinxs:', err);
-        return { jinxs: [], error: err.message };
+        console.error('Error loading global jinxes:', err);
+        return { jinxes: [], error: err.message };
     }
   });
 
-  ipcMain.handle('get-jinxs-project', async (event, currentPath) => {
+  ipcMain.handle('get-jinxes-project', async (event, currentPath) => {
     try {
-        const url = `${BACKEND_URL}/api/jinxs/project?currentPath=${encodeURIComponent(currentPath)}`;
-        console.log('Fetching project jinxs from URL:', url);
+        const url = `${BACKEND_URL}/api/jinxes/project?currentPath=${encodeURIComponent(currentPath)}`;
+        console.log('Fetching project jinxes from URL:', url);
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -267,11 +267,11 @@ function register(ctx) {
         }
 
         const data = await response.json();
-        console.log('Project jinxs data:', data);
+        console.log('Project jinxes data:', data);
         return data;
     } catch (err) {
-        console.error('Error loading project jinxs:', err);
-        return { jinxs: [], error: err.message };
+        console.error('Error loading project jinxes:', err);
+        return { jinxes: [], error: err.message };
     }
   });
 
@@ -281,7 +281,7 @@ function register(ctx) {
             data.currentPath = data.globalPath || INCOGNIDE_TEAM_PATH;
         }
         delete data.globalPath;
-        const response = await fetch(`${BACKEND_URL}/api/jinxs/save`, {
+        const response = await fetch(`${BACKEND_URL}/api/jinxes/save`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -302,7 +302,7 @@ function register(ctx) {
 
   ipcMain.handle('ingest-jinx', async (event, data) => {
     try {
-        const response = await fetch(`${BACKEND_URL}/api/jinxs/ingest`, {
+        const response = await fetch(`${BACKEND_URL}/api/jinxes/ingest`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -319,7 +319,7 @@ function register(ctx) {
 
   ipcMain.handle('delete-jinx', async (event, data) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/jinxs/delete`, {
+      const response = await fetch(`${BACKEND_URL}/api/jinxes/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -349,28 +349,28 @@ function register(ctx) {
     }
   });
 
-  ipcMain.handle('get-jinxs-all-teams', async (event, currentPath) => {
+  ipcMain.handle('get-jinxes-all-teams', async (event, currentPath) => {
     try {
       const [npcshRes, incognideRes, projectRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/jinxs/global`),
-        fetch(`${BACKEND_URL}/api/jinxs/project?currentPath=${encodeURIComponent(INCOGNIDE_TEAM_PATH)}`),
+        fetch(`${BACKEND_URL}/api/jinxes/global`),
+        fetch(`${BACKEND_URL}/api/jinxes/project?currentPath=${encodeURIComponent(INCOGNIDE_TEAM_PATH)}`),
         currentPath
-          ? fetch(`${BACKEND_URL}/api/jinxs/project?currentPath=${encodeURIComponent(currentPath)}`)
+          ? fetch(`${BACKEND_URL}/api/jinxes/project?currentPath=${encodeURIComponent(currentPath)}`)
           : Promise.resolve(null),
       ]);
 
-      const npcsh = npcshRes.ok ? await npcshRes.json() : { jinxs: [] };
-      const incognide = incognideRes.ok ? await incognideRes.json() : { jinxs: [] };
-      const project = projectRes?.ok ? await projectRes.json() : { jinxs: [] };
+      const npcsh = npcshRes.ok ? await npcshRes.json() : { jinxes: [] };
+      const incognide = incognideRes.ok ? await incognideRes.json() : { jinxes: [] };
+      const project = projectRes?.ok ? await projectRes.json() : { jinxes: [] };
 
       return {
-        npcsh: (npcsh.jinxs || []).map(j => ({ ...j, team: 'npcsh', scope: 'global' })),
-        incognide: (incognide.jinxs || []).map(j => ({ ...j, team: 'incognide', scope: 'global' })),
-        project: (project.jinxs || []).map(j => ({ ...j, team: 'project', scope: 'project' })),
+        npcsh: (npcsh.jinxes || []).map(j => ({ ...j, team: 'npcsh', scope: 'global' })),
+        incognide: (incognide.jinxes || []).map(j => ({ ...j, team: 'incognide', scope: 'global' })),
+        project: (project.jinxes || []).map(j => ({ ...j, team: 'project', scope: 'project' })),
         error: null,
       };
     } catch (err) {
-      console.error('Error loading all teams jinxs:', err);
+      console.error('Error loading all teams jinxes:', err);
       return { npcsh: [], incognide: [], project: [], error: err.message };
     }
   });

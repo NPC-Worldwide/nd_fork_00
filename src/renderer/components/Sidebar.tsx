@@ -1809,13 +1809,13 @@ const loadSidebarJinxes = async () => {
     setSidebarJinxesLoading(true);
     try {
         const [npcshRes, incognideRes, projectRes] = await Promise.all([
-            (window as any).api.getJinxsGlobal('npcsh'),
-            (window as any).api.getJinxsGlobal(),
-            currentPath ? (window as any).api.getJinxsProject(currentPath) : Promise.resolve({ jinxs: [] }),
+            (window as any).api.getJinxesGlobal('npcsh'),
+            (window as any).api.getJinxesGlobal(),
+            currentPath ? (window as any).api.getJinxesProject(currentPath) : Promise.resolve({ jinxes: [] }),
         ]);
-        const npcsh = (npcshRes?.jinxs || []).map((j: any) => ({ ...j, team: 'npcsh', scope: 'global' }));
-        const incognide = (incognideRes?.jinxs || []).map((j: any) => ({ ...j, team: 'incognide', scope: 'global' }));
-        const project = (projectRes?.jinxs || []).map((j: any) => ({ ...j, team: 'project', scope: 'project' }));
+        const npcsh = (npcshRes?.jinxes || []).map((j: any) => ({ ...j, team: 'npcsh', scope: 'global' }));
+        const incognide = (incognideRes?.jinxes || []).map((j: any) => ({ ...j, team: 'incognide', scope: 'global' }));
+        const project = (projectRes?.jinxes || []).map((j: any) => ({ ...j, team: 'project', scope: 'project' }));
         setSidebarJinxes([...project, ...incognide, ...npcsh]);
     } catch {  }
     finally { setSidebarJinxesLoading(false); }

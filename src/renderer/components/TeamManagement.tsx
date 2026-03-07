@@ -19,7 +19,7 @@ interface TeamManagementProps {
     embedded?: boolean;
 }
 
-type TabId = 'context' | 'npcs' | 'jinxs' | 'cron' | 'models' | 'databases' | 'mcp';
+type TabId = 'context' | 'npcs' | 'jinxes' | 'cron' | 'models' | 'databases' | 'mcp';
 
 const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList: initialJinxList = [], isGlobal }: { currentPath: string; npcList?: any[]; jinxList?: any[]; isGlobal: boolean }) => {
     const [cronJobs, setCronJobs] = useState<any[]>([]);
@@ -28,7 +28,7 @@ const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList
     const [error, setError] = useState<string | null>(null);
 
     const [npcs, setNpcs] = useState<any[]>(initialNpcList);
-    const [jinxs, setJinxs] = useState<any[]>(initialJinxList);
+    const [jinxes, setJinxes] = useState<any[]>(initialJinxList);
 
     const [newJobSchedule, setNewJobSchedule] = useState('*/5 * * * *');
     const [newJobCommand, setNewJobCommand] = useState('');
@@ -58,7 +58,7 @@ const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList
         }
     };
 
-    const fetchNpcsAndJinxs = async () => {
+    const fetchNpcsAndJinxes = async () => {
         try {
 
             const npcResponse = isGlobal
@@ -67,17 +67,17 @@ const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList
             if (npcResponse?.npcs) setNpcs(npcResponse.npcs);
 
             const jinxResponse = isGlobal
-                ? await (window as any).api.getJinxsGlobal?.()
-                : await (window as any).api.getJinxsProject?.(currentPath);
-            if (jinxResponse?.jinxs) setJinxs(jinxResponse.jinxs);
+                ? await (window as any).api.getJinxesGlobal?.()
+                : await (window as any).api.getJinxesProject?.(currentPath);
+            if (jinxResponse?.jinxes) setJinxes(jinxResponse.jinxes);
         } catch (err) {
-            console.error('Failed to fetch NPCs/Jinxs:', err);
+            console.error('Failed to fetch NPCs/Jinxes:', err);
         }
     };
 
     useEffect(() => {
         fetchCronAndDaemons();
-        fetchNpcsAndJinxs();
+        fetchNpcsAndJinxes();
     }, [currentPath, isGlobal]);
 
     const handleAddCronJob = async () => {
@@ -259,7 +259,7 @@ const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList
                                     className="w-full theme-input text-sm"
                                 >
                                     <option value="">-- Select a Jinx --</option>
-                                    {jinxs.map((jinx: any) => (
+                                    {jinxes.map((jinx: any) => (
                                         <option key={jinx.jinx_name || jinx.name} value={jinx.jinx_name || jinx.name}>
                                             {jinx.jinx_name || jinx.name} {jinx.description ? `- ${jinx.description.substring(0, 40)}...` : ''}
                                         </option>
@@ -382,7 +382,7 @@ const CronDaemonContent = ({ currentPath, npcList: initialNpcList = [], jinxList
                                     className="w-full theme-input text-sm"
                                 >
                                     <option value="">-- Select a Jinx --</option>
-                                    {jinxs.map((jinx: any) => (
+                                    {jinxes.map((jinx: any) => (
                                         <option key={jinx.jinx_name || jinx.name} value={jinx.jinx_name || jinx.name}>
                                             {jinx.jinx_name || jinx.name} {jinx.description ? `- ${jinx.description.substring(0, 40)}...` : ''}
                                         </option>
@@ -434,7 +434,7 @@ const SqlModelsContent = ({ currentPath, npcList = [], jinxList = [], isGlobal }
     const [isEditing, setIsEditing] = useState(false);
 
     const [npcs, setNpcs] = useState<any[]>([]);
-    const [jinxs, setJinxs] = useState<any[]>([]);
+    const [jinxes, setJinxes] = useState<any[]>([]);
 
     const [availableDatabases, setAvailableDatabases] = useState<{ name: string; path: string }[]>([]);
     const [selectedDatabase, setSelectedDatabase] = useState<string>('~/npcsh_history.db');
@@ -463,7 +463,7 @@ const SqlModelsContent = ({ currentPath, npcList = [], jinxList = [], isGlobal }
         }
     };
 
-    const fetchNpcsAndJinxs = async () => {
+    const fetchNpcsAndJinxes = async () => {
         try {
             const npcResponse = isGlobal
                 ? await (window as any).api.getNPCTeamGlobal?.()
@@ -471,11 +471,11 @@ const SqlModelsContent = ({ currentPath, npcList = [], jinxList = [], isGlobal }
             if (npcResponse?.npcs) setNpcs(npcResponse.npcs);
 
             const jinxResponse = isGlobal
-                ? await (window as any).api.getJinxsGlobal?.()
-                : await (window as any).api.getJinxsProject?.(currentPath);
-            if (jinxResponse?.jinxs) setJinxs(jinxResponse.jinxs);
+                ? await (window as any).api.getJinxesGlobal?.()
+                : await (window as any).api.getJinxesProject?.(currentPath);
+            if (jinxResponse?.jinxes) setJinxes(jinxResponse.jinxes);
         } catch (err) {
-            console.error('Failed to fetch NPCs/Jinxs:', err);
+            console.error('Failed to fetch NPCs/Jinxes:', err);
         }
     };
 
@@ -513,7 +513,7 @@ const SqlModelsContent = ({ currentPath, npcList = [], jinxList = [], isGlobal }
 
     useEffect(() => {
         fetchModels();
-        fetchNpcsAndJinxs();
+        fetchNpcsAndJinxes();
         fetchAvailableDatabases();
     }, [currentPath, isGlobal]);
 
@@ -836,7 +836,7 @@ LIMIT 10
                     <h3 className="text-lg font-semibold mb-2">No SQL Models Yet</h3>
                     <p className="theme-text-muted text-sm max-w-md mx-auto mb-4">
                         Create SQL models with npcsql syntax to build knowledge analytics databases.
-                        Use jinja-style references to NPCs and Jinxs for AI-powered transformations.
+                        Use jinja-style references to NPCs and Jinxes for AI-powered transformations.
                     </p>
                     <button
                         onClick={handleCreateModel}
@@ -1315,7 +1315,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
         { id: 'context', label: 'Context', icon: <FileJson size={16} /> },
         { id: 'npcs', label: 'NPCs', icon: <Users size={16} /> },
-        { id: 'jinxs', label: 'Jinxs', icon: <Wrench size={16} /> },
+        { id: 'jinxes', label: 'Jinxes', icon: <Wrench size={16} /> },
         { id: 'databases', label: 'Databases', icon: <Database size={16} /> },
         { id: 'mcp', label: 'MCP Servers', icon: <Server size={16} /> },
         { id: 'cron', label: 'Cron/Daemons', icon: <Clock size={16} /> },
@@ -1440,7 +1440,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                         />
                     </div>
                 )}
-                {activeTab === 'jinxs' && (
+                {activeTab === 'jinxes' && (
                     <JinxMenu
                         isOpen={true}
                         onClose={() => {}}
@@ -1481,9 +1481,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
     );
 
     const [setupNpcs, setSetupNpcs] = useState<any[]>([]);
-    const [setupJinxs, setSetupJinxs] = useState<any[]>([]);
+    const [setupJinxes, setSetupJinxes] = useState<any[]>([]);
     const [loadingSetup, setLoadingSetup] = useState(false);
-    const [setupTab, setSetupTab] = useState<'npcs' | 'jinxs' | 'settings'>('npcs');
+    const [setupTab, setSetupTab] = useState<'npcs' | 'jinxes' | 'settings'>('npcs');
     const [editingNpc, setEditingNpc] = useState<number | null>(null);
     const [newNpcName, setNewNpcName] = useState('');
     const [newNpcDirective, setNewNpcDirective] = useState('');
@@ -1496,11 +1496,11 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
             setEditingNpc(null);
             Promise.all([
                 (window as any).api.getNPCTeamGlobal?.(),
-                (window as any).api.getJinxsGlobal?.()
+                (window as any).api.getJinxesGlobal?.()
             ]).then(([npcRes, jinxRes]) => {
 
                 setSetupNpcs((npcRes?.npcs || []).map((npc: any) => ({ ...npc, enabled: true })));
-                setSetupJinxs((jinxRes?.jinxs || []).map((jinx: any) => ({ ...jinx, enabled: true })));
+                setSetupJinxes((jinxRes?.jinxes || []).map((jinx: any) => ({ ...jinx, enabled: true })));
                 setLoadingSetup(false);
             }).catch(() => setLoadingSetup(false));
         }
@@ -1511,7 +1511,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
     };
 
     const handleToggleJinx = (index: number) => {
-        setSetupJinxs(prev => prev.map((jinx, i) => i === index ? { ...jinx, enabled: !jinx.enabled } : jinx));
+        setSetupJinxes(prev => prev.map((jinx, i) => i === index ? { ...jinx, enabled: !jinx.enabled } : jinx));
     };
 
     const handleUpdateNpc = (index: number, field: string, value: string) => {
@@ -1536,7 +1536,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
 
     const handleAddJinx = () => {
         if (!newJinxName.trim()) return;
-        setSetupJinxs(prev => [...prev, {
+        setSetupJinxes(prev => [...prev, {
             name: newJinxName.trim().toLowerCase().replace(/\s+/g, '_'),
             enabled: true,
             isNew: true
@@ -1545,7 +1545,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
     };
 
     const handleRemoveJinx = (index: number) => {
-        setSetupJinxs(prev => prev.filter((_, i) => i !== index));
+        setSetupJinxes(prev => prev.filter((_, i) => i !== index));
     };
 
     const resyncModalElement = resyncModal && (
@@ -1557,7 +1557,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold theme-text-primary">Global Team Setup</h2>
-                        <p className="text-xs theme-text-muted">Configure your NPCs, jinxs, and settings</p>
+                        <p className="text-xs theme-text-muted">Configure your NPCs, jinxes, and settings</p>
                     </div>
                     <button onClick={() => setResyncModal(false)} className="ml-auto p-2 theme-hover rounded-lg">
                         <X size={18} />
@@ -1574,12 +1574,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                         <Users size={16} /> NPCs ({setupNpcs.filter(n => n.enabled).length})
                     </button>
                     <button
-                        onClick={() => setSetupTab('jinxs')}
+                        onClick={() => setSetupTab('jinxes')}
                         className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                            setupTab === 'jinxs' ? 'border-yellow-500 text-yellow-400' : 'border-transparent theme-text-muted hover:theme-text-primary'
+                            setupTab === 'jinxes' ? 'border-yellow-500 text-yellow-400' : 'border-transparent theme-text-muted hover:theme-text-primary'
                         }`}
                     >
-                        <Wrench size={16} /> Jinxs ({setupJinxs.filter(j => j.enabled).length})
+                        <Wrench size={16} /> Jinxes ({setupJinxes.filter(j => j.enabled).length})
                     </button>
                     <button
                         onClick={() => setSetupTab('settings')}
@@ -1730,14 +1730,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                 </div>
                             )}
 
-                            {setupTab === 'jinxs' && (
+                            {setupTab === 'jinxes' && (
                                 <div className="space-y-4">
                                     <p className="text-sm theme-text-muted">
-                                        Toggle jinxs on/off or add custom ones. Jinxs are command shortcuts you can invoke with /.
+                                        Toggle jinxes on/off or add custom ones. Jinxes are command shortcuts you can invoke with /.
                                     </p>
 
                                     <div className="grid grid-cols-3 gap-2">
-                                        {setupJinxs.map((jinx, i) => (
+                                        {setupJinxes.map((jinx, i) => (
                                             <div
                                                 key={i}
                                                 className={`rounded-lg border p-2 flex items-center gap-2 transition-all ${
@@ -1773,9 +1773,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                         ))}
                                     </div>
 
-                                    {setupJinxs.length === 0 && (
+                                    {setupJinxes.length === 0 && (
                                         <div className="text-center py-8 theme-text-muted">
-                                            No jinxs configured. Sync will add package defaults.
+                                            No jinxes configured. Sync will add package defaults.
                                         </div>
                                     )}
 
@@ -1804,7 +1804,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                             </button>
                                         </div>
                                         <p className="text-xs theme-text-muted mt-2">
-                                            Custom jinxs will be created as stubs. Edit them later in the Jinxs tab.
+                                            Custom jinxes will be created as stubs. Edit them later in the Jinxes tab.
                                         </p>
                                     </div>
                                 </div>
@@ -1824,7 +1824,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                             </li>
                                             <li className="flex items-start gap-2">
                                                 <span className="text-yellow-400 mt-1">•</span>
-                                                <span>Default jinxs are added while preserving your custom ones</span>
+                                                <span>Default jinxes are added while preserving your custom ones</span>
                                             </li>
                                             <li className="flex items-start gap-2">
                                                 <span className="text-green-400 mt-1">•</span>
@@ -1843,8 +1843,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                         <div className="mt-2 text-xs theme-text-muted grid grid-cols-2 gap-1">
                                             <span>├── npc_team/</span>
                                             <span className="text-purple-400">NPCs</span>
-                                            <span>├── jinxs/</span>
-                                            <span className="text-yellow-400">Jinxs</span>
+                                            <span>├── jinxes/</span>
+                                            <span className="text-yellow-400">Jinxes</span>
                                             <span>├── images/</span>
                                             <span className="text-gray-500">Generated images</span>
                                             <span>├── models/</span>
@@ -1864,8 +1864,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                                 <span className="theme-text-muted ml-2">NPCs enabled</span>
                                             </div>
                                             <div>
-                                                <span className="text-2xl font-bold text-yellow-400">{setupJinxs.filter(j => j.enabled).length}</span>
-                                                <span className="theme-text-muted ml-2">Jinxs enabled</span>
+                                                <span className="text-2xl font-bold text-yellow-400">{setupJinxes.filter(j => j.enabled).length}</span>
+                                                <span className="theme-text-muted ml-2">Jinxes enabled</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1877,7 +1877,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
 
                 <div className="px-6 py-4 border-t theme-border flex justify-between items-center">
                     <div className="text-xs theme-text-muted">
-                        {setupNpcs.filter(n => n.enabled).length} NPCs, {setupJinxs.filter(j => j.enabled).length} jinxs selected
+                        {setupNpcs.filter(n => n.enabled).length} NPCs, {setupJinxes.filter(j => j.enabled).length} jinxes selected
                     </div>
                     <div className="flex gap-3">
                         <button
@@ -1909,7 +1909,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({
                                     });
                                 }
 
-                                for (const jinx of setupJinxs.filter(j => j.isNew && j.enabled)) {
+                                for (const jinx of setupJinxes.filter(j => j.isNew && j.enabled)) {
                                     await (window as any).api.saveJinxGlobal?.({
                                         jinx_name: jinx.name,
                                         steps: [{ prompt: 'TODO: Configure this jinx' }],

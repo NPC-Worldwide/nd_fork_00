@@ -56,7 +56,7 @@ interface ChatInputProps {
     setSelectedJinx: (val: any) => void;
     jinxInputValues: any;
     setJinxInputValues: (fn: any) => void;
-    jinxsToDisplay: any[];
+    jinxesToDisplay: any[];
     showJinxDropdown: boolean;
     setShowJinxDropdown: (val: boolean) => void;
 
@@ -110,7 +110,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         autoIncludeContext, setAutoIncludeContext,
         contextPaneOverrides, setContextPaneOverrides, contentDataRef, paneVersion,
         executionMode, setExecutionMode, selectedJinx, setSelectedJinx,
-        jinxInputValues, setJinxInputValues, jinxsToDisplay,
+        jinxInputValues, setJinxInputValues, jinxesToDisplay,
         showJinxDropdown, setShowJinxDropdown,
         availableModels, modelsLoading, modelsError, currentModel, setCurrentModel,
         currentProvider, setCurrentProvider, favoriteModels, toggleFavoriteModel,
@@ -260,7 +260,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         if (match) {
             const jinxName = match[1].toLowerCase();
 
-            const matches = jinxsToDisplay.filter((j: any) =>
+            const matches = jinxesToDisplay.filter((j: any) =>
                 j.name.toLowerCase() === jinxName ||
                 j.name.toLowerCase().startsWith(jinxName)
             );
@@ -275,7 +275,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
             setDetectedJinxes([]);
             setShowJinxSuggestion(false);
         }
-    }, [localInput, jinxsToDisplay, executionMode, selectedJinx]);
+    }, [localInput, jinxesToDisplay, executionMode, selectedJinx]);
 
     useEffect(() => {
         const isCurrentlyJinxMode = executionMode !== 'chat' && executionMode !== 'tool_agent' && selectedJinx;
@@ -368,13 +368,13 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         );
     }, [availableNPCs, npcSearch]);
 
-    const filteredJinxs = useMemo(() => {
-        if (!jinxSearch.trim()) return jinxsToDisplay;
+    const filteredJinxes = useMemo(() => {
+        if (!jinxSearch.trim()) return jinxesToDisplay;
         const q = jinxSearch.toLowerCase();
-        return jinxsToDisplay.filter((j: any) =>
+        return jinxesToDisplay.filter((j: any) =>
             j.name?.toLowerCase().includes(q) || j.group?.toLowerCase().includes(q) || j.description?.toLowerCase().includes(q)
         );
-    }, [jinxsToDisplay, jinxSearch]);
+    }, [jinxesToDisplay, jinxSearch]);
 
     useEffect(() => {
         if (showModelsDropdown) {
@@ -751,7 +751,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         const PANE_LABELS: Record<string, string> = {
             'graph-viewer': 'Knowledge Graph', 'datadash': 'Dashboard', 'dbtool': 'Database',
             'memory-manager': 'Memory', 'photoviewer': 'Photos', 'npcteam': 'NPCs',
-            'jinx': 'Jinxs', 'teammanagement': 'Team', 'diff': 'Diff',
+            'jinx': 'Jinxes', 'teammanagement': 'Team', 'diff': 'Diff',
             'browsergraph': 'Web Graph', 'scherzo': 'Audio', 'library': 'Library',
             'diskusage': 'Disk Usage', 'help': 'Help', 'cron-daemon': 'Cron',
             'projectenv': 'Environment', 'search': 'Search', 'settings': 'Settings',
@@ -1399,7 +1399,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                         type="text"
                                         value={jinxSearch}
                                         onChange={(e) => setJinxSearch(e.target.value)}
-                                        placeholder="Search modes & jinxs..."
+                                        placeholder="Search modes & jinxes..."
                                         className="w-full theme-input rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500/50"
                                         onKeyDown={(e) => e.stopPropagation()}
                                     />
@@ -1417,7 +1417,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                     )}
                                     {jinxSearch.trim() ? (
                                         <div className="p-1">
-                                            {filteredJinxs.length > 0 ? filteredJinxs.map((jinx: any) => (
+                                            {filteredJinxes.length > 0 ? filteredJinxes.map((jinx: any) => (
                                                 <div key={jinx.name} className="px-2 py-1.5 text-xs theme-hover rounded cursor-pointer transition-colors flex items-center justify-between theme-text-primary" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>
                                                     <span>{jinx.name}</span>
                                                     <span className="text-[9px] theme-text-muted">{jinx.group}</span>
@@ -1428,17 +1428,17 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                         </div>
                                     ) : (
                                         ['project', 'global'].map(origin => {
-                                            const originJinxs = jinxsToDisplay.filter((j: any) => (j.origin || 'unknown') === origin);
-                                            if (!originJinxs.length) return null;
-                                            const grouped = originJinxs.reduce((acc: any, j: any) => { const g = j.group || 'root'; if (!acc[g]) acc[g] = []; acc[g].push(j); return acc; }, {});
+                                            const originJinxes = jinxesToDisplay.filter((j: any) => (j.origin || 'unknown') === origin);
+                                            if (!originJinxes.length) return null;
+                                            const grouped = originJinxes.reduce((acc: any, j: any) => { const g = j.group || 'root'; if (!acc[g]) acc[g] = []; acc[g].push(j); return acc; }, {});
                                             return (
                                                 <div key={origin} className="border-t theme-border">
                                                     <div className="px-2 py-1 text-[9px] uppercase theme-text-muted">{origin === 'project' ? '📁 Project' : '🌐 Global'}</div>
-                                                    {Object.entries(grouped).filter(([g]) => g.toLowerCase() !== 'modes').sort(([a], [b]) => a.localeCompare(b)).map(([gName, jinxs]: [string, any]) => (
+                                                    {Object.entries(grouped).filter(([g]) => g.toLowerCase() !== 'modes').sort(([a], [b]) => a.localeCompare(b)).map(([gName, jinxes]: [string, any]) => (
                                                         <details key={`${origin}-${gName}`} className="px-1">
                                                             <summary className="px-2 py-1 text-xs cursor-pointer flex items-center gap-1 theme-hover rounded theme-text-primary"><FolderTree size={10} className="text-purple-400" /> {gName}</summary>
                                                             <div className="pl-4 pb-1">
-                                                                {jinxs.sort((a: any, b: any) => a.name.localeCompare(b.name)).map((jinx: any) => (
+                                                                {jinxes.sort((a: any, b: any) => a.name.localeCompare(b.name)).map((jinx: any) => (
                                                                     <div key={jinx.name} className="px-2 py-1 text-xs theme-hover rounded cursor-pointer transition-colors theme-text-primary" onClick={() => { setExecutionMode(jinx.name); setSelectedJinx(jinx); setShowJinxDropdown(false); }}>{jinx.name}</div>
                                                                 ))}
                                                             </div>

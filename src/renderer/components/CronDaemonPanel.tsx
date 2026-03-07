@@ -137,7 +137,7 @@ FROM concept_facts`,
     },
     {
         id: 'jinx_activity', name: 'jinx_activity',
-        description: 'Jinx execution stats — which jinxs run most, by which NPCs, error rates',
+        description: 'Jinx execution stats — which jinxes run most, by which NPCs, error rates',
         materialization: 'table', schedule: '0 0 * * 1',
         sql: `{{ config(materialized='table') }}
 

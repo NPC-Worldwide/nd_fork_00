@@ -340,10 +340,10 @@ const StatusBar: React.FC<StatusBarProps> = ({
                     </button>
 
                     <button
-                        data-tutorial="jinxs-button"
+                        data-tutorial="jinxes-button"
                         onClick={() => createJinxPane?.()}
                         className={`${btnClass} text-yellow-600 dark:text-yellow-400`}
-                        title="Jinxs"
+                        title="Jinxes"
                     >
                         <Zap size={20} />
                     </button>
@@ -352,7 +352,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
                         data-tutorial="team-management-button"
                         onClick={() => createTeamManagementPane?.()}
                         className={`${btnClass} text-indigo-600 dark:text-indigo-400`}
-                        title="Team Management (NPCs, Jinxs, Databases, MCP, Cron, SQL Models)"
+                        title="Team Management (NPCs, Jinxes, Databases, MCP, Cron, SQL Models)"
                     >
                         <Users size={20} />
                     </button>

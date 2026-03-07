@@ -412,7 +412,7 @@ function register(ctx) {
         mcpServerPath: data.executionMode === 'tool_agent' ? data.mcpServerPath : undefined,
         parentMessageId: data.parentMessageId,
         isResend: data.isRerun || false,
-        jinxs: data.jinxs || [],
+        jinxes: data.jinxes || [],
         tools: data.tools || [],
 
         userMessageId: data.userMessageId,

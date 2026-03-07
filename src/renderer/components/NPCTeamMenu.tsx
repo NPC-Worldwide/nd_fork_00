@@ -43,7 +43,7 @@ const NPCTeamMenu = ({
     const [npcs, setNpcs] = useState([]);
     const [selectedNpc, setSelectedNpc] = useState(null);
     const [editedNpc, setEditedNpc] = useState(null);
-    const [availableJinxs, setAvailableJinxs] = useState([]);
+    const [availableJinxes, setAvailableJinxes] = useState([]);
     const [activeTab, setActiveTab] = useState('config');
     const [expandedExecution, setExpandedExecution] = useState(null);
 
@@ -100,9 +100,9 @@ const NPCTeamMenu = ({
             setNpcs(npcResponse.npcs || []);
 
             const jinxResponse = isGlobal
-                ? await window.api.getJinxsGlobal(globalPath)
-                : await window.api.getJinxsProject(currentPath);
-            setAvailableJinxs(jinxResponse.jinxs || []);
+                ? await window.api.getJinxesGlobal(globalPath)
+                : await window.api.getJinxesProject(currentPath);
+            setAvailableJinxes(jinxResponse.jinxes || []);
 
             setLoading(false);
         };
@@ -305,14 +305,14 @@ const NPCTeamMenu = ({
 
     const handleNPCSelect = async (npc) => {
         setSelectedNpc(npc);
-        const jinxsArray = npc.jinxs === '*'
+        const jinxesArray = npc.jinxes === '*'
             ? ['*']
-            : Array.isArray(npc.jinxs)
-                ? npc.jinxs
-                : npc.jinxs
-                    ? [npc.jinxs]
+            : Array.isArray(npc.jinxes)
+                ? npc.jinxes
+                : npc.jinxes
+                    ? [npc.jinxes]
                     : ['*'];
-        setEditedNpc({ ...npc, jinxs: jinxsArray });
+        setEditedNpc({ ...npc, jinxes: jinxesArray });
         setActiveTab('config');
         setSelectedExecutions(new Set());
         setVisibleCount(50);
@@ -340,33 +340,33 @@ const NPCTeamMenu = ({
 
     const handleJinxPatternChange = (index, value) => {
         setEditedNpc(prev => {
-            const newPatterns = [...(prev.jinxs || [])];
+            const newPatterns = [...(prev.jinxes || [])];
             newPatterns[index] = value;
-            return { ...prev, jinxs: newPatterns };
+            return { ...prev, jinxes: newPatterns };
         });
     };
 
     const addJinxPattern = () => {
         setEditedNpc(prev => ({
             ...prev,
-            jinxs: [...(prev.jinxs || []), '']
+            jinxes: [...(prev.jinxes || []), '']
         }));
     };
 
     const removeJinxPattern = (index) => {
         setEditedNpc(prev => ({
             ...prev,
-            jinxs: prev.jinxs.filter((_, i) => i !== index)
+            jinxes: prev.jinxes.filter((_, i) => i !== index)
         }));
     };
 
     const handleSave = async () => {
         const npcToSave = {
             ...editedNpc,
-            jinxs: editedNpc.jinxs.length === 1 &&
-                   editedNpc.jinxs[0] === '*'
+            jinxes: editedNpc.jinxes.length === 1 &&
+                   editedNpc.jinxes[0] === '*'
                 ? '*'
-                : editedNpc.jinxs
+                : editedNpc.jinxes
         };
 
         const response = await window.api.saveNPC({
@@ -664,7 +664,7 @@ const NPCTeamMenu = ({
                                             </div>
 
                                             <div className="space-y-1">
-                                                {(editedNpc.jinxs || []).map((pattern, i) => (
+                                                {(editedNpc.jinxes || []).map((pattern, i) => (
                                                     <div key={i} className="flex
                                                         items-center gap-1">
                                                         <input

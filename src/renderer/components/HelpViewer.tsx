@@ -96,7 +96,7 @@ export const HelpViewer: React.FC<HelpViewerProps> = ({ appVersion }) => {
                         <p className="text-sm theme-text-muted leading-relaxed">
                             Incognide is an AI-native desktop environment that combines an integrated development environment,
                             web browser, document editing, terminal, and knowledge management into a flexible tiled workspace.
-                            Create custom AI personas (NPCs), automate workflows with Jinxs, and organize your work however you like.
+                            Create custom AI personas (NPCs), automate workflows with Jinxes, and organize your work however you like.
                         </p>
                     </div>
                 )}
@@ -154,7 +154,7 @@ export const HelpViewer: React.FC<HelpViewerProps> = ({ appVersion }) => {
                 )}
 
                 {matchesSearch('npc persona jinx workflow automation agent') && (
-                    <CollapsibleSection title="NPCs & Jinxs" icon={<Users size={18} />}>
+                    <CollapsibleSection title="NPCs & Jinxes" icon={<Users size={18} />}>
                         <div className="space-y-3">
                             <div>
                                 <h4 className="font-medium theme-text-primary text-sm mb-1">NPCs (Personas)</h4>
@@ -166,9 +166,9 @@ export const HelpViewer: React.FC<HelpViewerProps> = ({ appVersion }) => {
                                 </p>
                             </div>
                             <div>
-                                <h4 className="font-medium theme-text-primary text-sm mb-1">Jinxs (Workflows)</h4>
+                                <h4 className="font-medium theme-text-primary text-sm mb-1">Jinxes (Workflows)</h4>
                                 <p className="text-xs theme-text-muted">
-                                    Jinxs are reusable YAML workflows with Jinja2 templating. Type <code className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">/jinx_name</code> in chat
+                                    Jinxes are reusable YAML workflows with Jinja2 templating. Type <code className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">/jinx_name</code> in chat
                                     to run them. Define inputs, chain multiple AI steps, and automate repetitive tasks.
                                 </p>
                             </div>
@@ -300,7 +300,7 @@ export const HelpViewer: React.FC<HelpViewerProps> = ({ appVersion }) => {
                             </div>
                             <div>
                                 <div className="theme-text-primary">~/.npcsh/npc_team/</div>
-                                <div className="text-[10px] theme-text-muted pl-3">Global NPCs, jinxs, contexts</div>
+                                <div className="text-[10px] theme-text-muted pl-3">Global NPCs, jinxes, contexts</div>
                             </div>
                             <div>
                                 <div className="theme-text-primary">~/.npcshrc</div>
@@ -308,7 +308,7 @@ export const HelpViewer: React.FC<HelpViewerProps> = ({ appVersion }) => {
                             </div>
                             <div>
                                 <div className="theme-text-primary">./npc_team/</div>
-                                <div className="text-[10px] theme-text-muted pl-3">Project-local NPCs and jinxs</div>
+                                <div className="text-[10px] theme-text-muted pl-3">Project-local NPCs and jinxes</div>
                             </div>
                             <div>
                                 <div className="theme-text-primary">./.npcsh/</div>
