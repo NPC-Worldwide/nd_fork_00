@@ -322,6 +322,7 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
         const [localDragOver, setLocalDragOver] = useState(false);
         const [localDropSide, setLocalDropSide] = useState<string | null>(null);
         const dragCounterRef = useRef(0);
+        const [, forceRender] = useState(0);
 
         const onDrop = (e, side) => {
             e.preventDefault();
@@ -661,14 +662,14 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
                                 if (paneData.tabs[tabIndex]) {
                                     paneData.tabs[tabIndex].fileContent = fileContent;
                                 }
-                                setRootLayoutNode?.(prev => ({ ...prev }));
+                                forceRender(n => n + 1);
                             } catch (err) {
                                 console.error('Error loading file content:', err);
                             }
                         })();
                     }
 
-                    setRootLayoutNode?.(prev => ({ ...prev }));
+                    forceRender(n => n + 1);
                 } else {
 
                     updateContentPane(node.id, contentType, comp.draggedItem.id);
@@ -765,7 +766,7 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
                     paneData.browserTitle = selectedTab.browserTitle || 'Browser';
                 }
 
-                setRootLayoutNode?.(prev => ({ ...prev }));
+                forceRender(n => n + 1);
             }
         };
 
@@ -849,7 +850,7 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
                         }
                         delete contentDataRef.current[`${node.id}_${lastTab.id}`];
                     }
-                    setRootLayoutNode?.(prev => ({ ...prev }));
+                    forceRender(n => n + 1);
                 }
             }
         };
@@ -887,7 +888,7 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
                 } else if (fromIndex > paneData.activeTabIndex && toIndex <= paneData.activeTabIndex) {
                     paneData.activeTabIndex++;
                 }
-                setRootLayoutNode?.(prev => ({ ...prev }));
+                forceRender(n => n + 1);
             }
         };
 
@@ -968,7 +969,7 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
                     paneData.chatStats = extraChatProps.chatStats;
                 }
 
-                setRootLayoutNode?.(prev => ({ ...prev }));
+                forceRender(n => n + 1);
             }
         };
 
