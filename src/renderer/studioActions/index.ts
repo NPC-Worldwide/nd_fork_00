@@ -17,6 +17,7 @@ export interface StudioContext {
   toggleZenMode?: (paneId: string) => void;
   generateId: () => string;
   findPanePath: (node: any, paneId: string, path?: number[]) => number[] | null;
+  notifyPaneUpdate?: (paneId: string) => void;
   windowId?: string;
   currentPath?: string;
 }

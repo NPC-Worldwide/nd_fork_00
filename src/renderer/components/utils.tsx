@@ -758,7 +758,7 @@ export const usePaneAwareStreamListeners = (
     listenersAttached: React.MutableRefObject<boolean>,
     streamToPaneRef: React.MutableRefObject<Record<string, string>>,
     contentDataRef: React.MutableRefObject<any>,
-    setRootLayoutNode: (fn: (prev: any) => any) => void,
+    paneUpdateEmitter: EventTarget,
     setIsStreaming: (streaming: boolean) => void,
     setAiEditModal: (modal: any) => void,
     parseAgenticResponse: (content: string, contexts: any[]) => any[],
@@ -770,6 +770,10 @@ export const usePaneAwareStreamListeners = (
         if (!config?.stream || listenersAttached.current) {
             return;
         }
+
+        const notifyPaneUpdate = (paneId: string) => {
+            paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId } }));
+        };
 
         const handleStreamData = (_: any, { streamId: incomingStreamId, chunk }: any) => {
             const targetPaneId = streamToPaneRef.current[incomingStreamId];
@@ -957,12 +961,12 @@ export const usePaneAwareStreamListeners = (
                                                 }
                                             }
 
-                                            setRootLayoutNode(prev => ({ ...prev }));
+                                            notifyPaneUpdate(targetPaneId);
                                         } catch (err) {
                                             console.error(`[STUDIO] Action ${actionName} failed:`, err);
                                             tc.status = 'error';
                                             tc.result_preview = `Error: ${err}`;
-                                            setRootLayoutNode(prev => ({ ...prev }));
+                                            notifyPaneUpdate(targetPaneId);
                                         }
                                     })();
                                 }
@@ -1002,7 +1006,7 @@ export const usePaneAwareStreamListeners = (
                     }
 
                     paneData.chatMessages.messages = paneData.chatMessages.allMessages.slice(-(paneData.chatMessages.displayedMessageCount || 20));
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyPaneUpdate(targetPaneId);
                 }
             } catch (err) {
                 console.error('[REACT] Error processing stream chunk:', err, 'Raw chunk:', chunk);
@@ -1058,7 +1062,7 @@ export const usePaneAwareStreamListeners = (
                 setIsStreaming(false);
             }
 
-            setRootLayoutNode(prev => ({ ...prev }));
+            if (targetPaneId) notifyPaneUpdate(targetPaneId);
             await refreshConversations();
         };
 
@@ -1081,7 +1085,7 @@ export const usePaneAwareStreamListeners = (
             if (Object.keys(streamToPaneRef.current).length === 0) {
                 setIsStreaming(false);
             }
-            setRootLayoutNode(prev => ({ ...prev }));
+            if (targetPaneId) notifyPaneUpdate(targetPaneId);
         };
 
         const cleanupStreamData = window.api.onStreamData(handleStreamData);
@@ -1115,7 +1119,7 @@ export const usePaneAwareStreamListeners = (
                     if (Object.keys(streamToPaneRef.current).length === 0) {
                         setIsStreaming(false);
                     }
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyPaneUpdate(targetPaneId);
                 }
             }
         }, 30000);
@@ -1129,7 +1133,7 @@ export const usePaneAwareStreamListeners = (
             clearInterval(staleStreamInterval);
             listenersAttached.current = false;
         };
-    }, [config, listenersAttached, streamToPaneRef, contentDataRef, setRootLayoutNode, setIsStreaming, setAiEditModal, parseAgenticResponse, getConversationStats, refreshConversations, studioContext]);
+    }, [config, listenersAttached, streamToPaneRef, contentDataRef, paneUpdateEmitter, setIsStreaming, setAiEditModal, parseAgenticResponse, getConversationStats, refreshConversations, studioContext]);
 };
 
 export const useTrackLastActiveChatPane = (

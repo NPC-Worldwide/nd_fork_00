@@ -1,0 +1,14 @@
+jinx_name: navigate
+description: >
+  Navigate within a pane. Browser: go to URL. Presentation: go to slide
+  (pass index as target). Spreadsheet: switch sheet (pass sheet name as target).
+inputs:
+  - target
+  - { pane_id: "active" }
+steps:
+  - name: navigate
+    engine: incognide
+    action: navigate_pane
+    args:
+      target: "{{ target }}"
+      paneId: "{{ pane_id }}"

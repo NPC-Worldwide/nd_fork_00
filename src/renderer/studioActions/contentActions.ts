@@ -229,7 +229,158 @@ async function run_terminal(
   }
 }
 
+async function write_pane(
+  args: { paneId?: string; content: string; position?: string; path?: string },
+  ctx: StudioContext
+): Promise<StudioActionResult> {
+  const paneId = args.paneId === 'active' || !args.paneId
+    ? ctx.activeContentPaneId
+    : args.paneId;
+
+  const data = ctx.contentDataRef.current[paneId];
+  if (!data) return { success: false, error: `Pane not found: ${paneId}` };
+  if (!args.content) return { success: false, error: 'content is required' };
+
+  const { contentType } = data;
+  const fileTypes = ['editor', 'markdown-preview', 'latex', 'notebook', 'exp', 'mindmap'];
+
+  if (fileTypes.includes(contentType)) {
+    ctx.contentDataRef.current[paneId] = { ...data, fileContent: args.content, fileChanged: true };
+    if (args.path && args.path !== data.contentId) {
+      ctx.updateContentPane(paneId, 'editor', args.path);
+    }
+    return { success: true, paneId, type: contentType, bytesWritten: args.content.length };
+  }
+
+  if (contentType === 'docx' && data.writeDocumentContent) {
+    const result = await data.writeDocumentContent(args.content, args.position || 'replace');
+    return { success: true, paneId, type: 'docx', ...result };
+  }
+
+  if (contentType === 'csv' && data.updateSpreadsheetCells) {
+    try {
+      const updates = JSON.parse(args.content);
+      const result = await data.updateSpreadsheetCells(updates);
+      return { success: true, paneId, type: 'csv', ...result };
+    } catch {
+      return { success: false, error: 'For spreadsheets, content must be JSON array of {row, col, value}' };
+    }
+  }
+
+  if (contentType === 'pptx' && data.updateSlideText) {
+    try {
+      const { shapeIndex, text, slideIndex } = JSON.parse(args.content);
+      const result = await data.updateSlideText(shapeIndex, text, slideIndex);
+      return { success: true, paneId, type: 'pptx', ...result };
+    } catch {
+      return { success: false, error: 'For presentations, content must be JSON {shapeIndex, text, slideIndex?}' };
+    }
+  }
+
+  if (contentType === 'terminal') {
+    await (window as any).api?.writeToTerminal?.({ id: data.contentId, data: args.content + '\n' });
+    return { success: true, paneId, type: 'terminal', message: 'Sent to terminal' };
+  }
+
+  return { success: false, error: `Write not supported for pane type: ${contentType}` };
+}
+
+async function interact(
+  args: { paneId?: string; code: string },
+  ctx: StudioContext
+): Promise<StudioActionResult> {
+  const paneId = args.paneId === 'active' || !args.paneId
+    ? ctx.activeContentPaneId
+    : args.paneId;
+
+  const data = ctx.contentDataRef.current[paneId];
+  if (!data) return { success: false, error: `Pane not found: ${paneId}` };
+  if (!args.code) return { success: false, error: 'code is required' };
+
+  const { contentType } = data;
+
+  if (contentType === 'terminal') {
+    await (window as any).api?.writeToTerminal?.({ id: data.contentId, data: args.code + '\n' });
+    return { success: true, paneId, type: 'terminal', message: 'Command sent' };
+  }
+
+  if (contentType === 'browser' && data.browserEval) {
+    try {
+      const result = await data.browserEval(args.code);
+      return { success: true, paneId, type: 'browser', result };
+    } catch (e: any) {
+      return { success: false, error: `Browser eval error: ${e.message || e}` };
+    }
+  }
+
+  if (contentType === 'csv' && data.evalSpreadsheet) {
+    try {
+      const result = await data.evalSpreadsheet(args.code);
+      return { success: true, paneId, type: 'csv', result };
+    } catch (e: any) {
+      return { success: false, error: `Spreadsheet eval error: ${e.message || e}` };
+    }
+  }
+
+  if (contentType === 'docx' && data.evalDocument) {
+    try {
+      const result = await data.evalDocument(args.code);
+      return { success: true, paneId, type: 'docx', result };
+    } catch (e: any) {
+      return { success: false, error: `Document eval error: ${e.message || e}` };
+    }
+  }
+
+  if (contentType === 'pptx' && data.evalPresentation) {
+    try {
+      const result = await data.evalPresentation(args.code);
+      return { success: true, paneId, type: 'pptx', result };
+    } catch (e: any) {
+      return { success: false, error: `Presentation eval error: ${e.message || e}` };
+    }
+  }
+
+  return { success: false, error: `Interact not supported for pane type: ${contentType}` };
+}
+
+async function navigate_pane(
+  args: { paneId?: string; target: string },
+  ctx: StudioContext
+): Promise<StudioActionResult> {
+  const paneId = args.paneId === 'active' || !args.paneId
+    ? ctx.activeContentPaneId
+    : args.paneId;
+
+  const data = ctx.contentDataRef.current[paneId];
+  if (!data) return { success: false, error: `Pane not found: ${paneId}` };
+  if (!args.target) return { success: false, error: 'target is required' };
+
+  const { contentType } = data;
+
+  if (contentType === 'browser' && data.navigateTo) {
+    await data.navigateTo(args.target);
+    return { success: true, paneId, type: 'browser', url: args.target };
+  }
+
+  if (contentType === 'pptx' && data.goToSlide) {
+    const idx = parseInt(args.target);
+    if (isNaN(idx)) return { success: false, error: 'target must be a slide index number for presentations' };
+    await data.goToSlide(idx);
+    return { success: true, paneId, type: 'pptx', slideIndex: idx };
+  }
+
+  if (contentType === 'csv' && data.switchSheet) {
+    await data.switchSheet(args.target);
+    return { success: true, paneId, type: 'csv', sheet: args.target };
+  }
+
+  return { success: false, error: `Navigate not supported for pane type: ${contentType}` };
+}
+
 registerAction('read_pane', read_pane);
 registerAction('write_file', write_file);
+registerAction('write_pane', write_pane);
 registerAction('get_selection', get_selection);
 registerAction('run_terminal', run_terminal);
+registerAction('interact', interact);
+registerAction('navigate_pane', navigate_pane);

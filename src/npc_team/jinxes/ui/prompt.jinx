@@ -1,0 +1,16 @@
+jinx_name: prompt
+description: >
+  Ask the user for input. Types: choices (pick from options), confirm (yes/no),
+  text (free text input), form (multiple fields). Returns the user's response.
+inputs:
+  - message
+  - { prompt_type: "choices" }
+  - { options: "[]" }
+steps:
+  - name: prompt
+    engine: incognide
+    action: prompt_user
+    args:
+      message: "{{ message }}"
+      prompt_type: "{{ prompt_type }}"
+      options: "{{ options }}"

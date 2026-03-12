@@ -632,6 +632,12 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
     const [displayedMessageCount, setDisplayedMessageCount] = useState(10);
     const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
     const streamToPaneRef = useRef({});
+    const paneUpdateEmitter = useRef(new EventTarget()).current;
+    const notifyAllPanes = useCallback(() => {
+        for (const paneId of Object.keys(contentDataRef.current)) {
+            paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId } }));
+        }
+    }, [paneUpdateEmitter]);
 
     const [selectedMessages, setSelectedMessages] = useState(new Set());
     const [messageSelectionMode, setMessageSelectionMode] = useState(false);
@@ -650,7 +656,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         selectedModel: '',
         selectedNPC: ''
     });
-    const [mcpServerPath, setMcpServerPath] = useState('~/.npcsh/npc_team/mcp_server.py');
+    const [mcpServerPath, setMcpServerPath] = useState('python -m npcpy.mcp_server --team ~/.npcsh/incognide/npc_team');
     const [selectedMcpTools, setSelectedMcpTools] = useState([]);
     const [availableMcpTools, setAvailableMcpTools] = useState([]);
     const [mcpToolsLoading, setMcpToolsLoading] = useState(false);
@@ -969,7 +975,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                 if (paneData?.contentType === 'editor' && paneData.fileContent !== undefined) {
                     api.api.writeFileContent?.(paneData.contentId, paneData.fileContent);
                     paneData.fileChanged = false;
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyAllPanes();
                 }
             }));
         }
@@ -1647,7 +1653,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                             paneData.contentId = newActiveTab.contentId;
                         }
                         // Force re-render
-                        setRootLayoutNode(prev => ({ ...prev }));
+                        notifyAllPanes();
                     } else {
                         // Single tab or no tabs - close the whole pane
                         const nodePath = findNodePath(rootLayoutNodeRef.current, activeContentPaneId);
@@ -1683,7 +1689,7 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
                             }
                             activePane.chatMessages.allMessages = formatted;
                             activePane.chatMessages.messages = formatted.slice(-activePane.chatMessages.displayedMessageCount);
-                            setRootLayoutNode(prev => ({ ...prev }));
+                            notifyAllPanes();
                             console.log('[REFRESH] Reloaded', formatted.length, 'messages for conversation', activePane.contentId);
                         } catch (err) {
                             console.error('[REFRESH] Failed to reload messages:', err);
@@ -2032,7 +2038,7 @@ const handleBroadcast = useCallback(async (messageToResend: any, models: string[
     activePaneData.chatMessages.messages = activePaneData.chatMessages.allMessages.slice(
         -(activePaneData.chatMessages.displayedMessageCount || 20)
     );
-    setRootLayoutNode(prev => ({ ...prev }));
+    notifyAllPanes();
 
     // Execute all in parallel
     const executePromises = combinations.map(async ({ model, npc }, i) => {
@@ -2164,7 +2170,7 @@ const handleExpandBranches = useCallback((cellId: string) => {
         );
         if (newPaneId) {
             contentDataRef.current[newPaneId].branchData = branchData;
-            setRootLayoutNode(prev => ({ ...prev })); // Trigger re-render
+            notifyAllPanes(); // Trigger re-render
         }
     }, 50);
 
@@ -2224,7 +2230,7 @@ const handleBranchOptionsConfirm = useCallback(async (options: BranchOptions) =>
         activePaneData.chatMessages.messages = activePaneData.chatMessages.allMessages.slice(
             -(activePaneData.chatMessages.displayedMessageCount || 20)
         );
-        setRootLayoutNode(prev => ({ ...prev }));
+        notifyAllPanes();
 
         try {
             await (window as any).api.executeCommandStream({
@@ -2309,7 +2315,7 @@ const handleRunScript = useCallback(async (scriptPath: string) => {
         if (paneData?.fileChanged && paneData?.fileContent) {
             await window.api?.writeFileContent?.(scriptPath, paneData.fileContent);
             paneData.fileChanged = false;
-            setRootLayoutNode(p => ({ ...p }));
+            notifyAllPanes();
         }
     }
 
@@ -3268,7 +3274,7 @@ const handleOpenDocumentFromLibrary = useCallback(async (path: string, type: 'pd
     setTimeout(async () => {
         if (targetPaneId) {
             await updateContentPane(targetPaneId, type, path);
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
         }
     }, 0);
 }, [updateContentPane]);
@@ -3381,14 +3387,14 @@ const renderFolderViewerPane = useCallback(({ nodeId }: { nodeId: string }) => {
             paneData.activeTabIndex = paneData.tabs.length - 1;
             paneData.contentType = contentType;
             paneData.contentId = filePath;
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
         }
     };
 
     const handleNavigate = (newPath: string) => {
         if (paneData) {
             paneData.contentId = newPath;
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
         }
     };
 
@@ -3810,7 +3816,7 @@ const renderMessageContextMenu = () => null;
                     setFolderStructure(structureResult);
                 }
             }
-            setRootLayoutNode(p => ({ ...p }));
+            notifyAllPanes();
         } catch (err: any) {
             setError(`Failed to rename file: ${err.message}`);
         } finally {
@@ -3829,7 +3835,7 @@ const renderMessageContextMenu = () => null;
             contentDataRef.current[emptyPaneId] = { shellType, contentType: 'terminal', contentId: newTerminalId };
             await updateContentPane(emptyPaneId, 'terminal', newTerminalId);
             setActiveContentPaneId(emptyPaneId);
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
             return;
         }
 
@@ -3845,7 +3851,7 @@ const renderMessageContextMenu = () => null;
         setTimeout(async () => {
             if (targetPaneId) {
                 await updateContentPane(targetPaneId, 'terminal', newTerminalId);
-                setRootLayoutNode(prev => ({ ...prev }));
+                notifyAllPanes();
             }
         }, 0);
 
@@ -3937,7 +3943,7 @@ const renderMessageContextMenu = () => null;
         setTimeout(async () => {
             if (targetPaneId) {
                 await updateContentPane(targetPaneId, 'dbtool', 'dbtool');
-                setRootLayoutNode(prev => ({ ...prev }));
+                notifyAllPanes();
             }
         }, 0);
     }, [updateContentPane]);
@@ -4056,7 +4062,7 @@ const handleGlobalDragEnd = () => {
         setActiveContentPaneId(emptyPaneId);
         setActiveConversationId(null);
         setCurrentFile(null);
-        setRootLayoutNode(prev => ({ ...prev }));
+        notifyAllPanes();
         return;
     }
 
@@ -4116,7 +4122,7 @@ const handleNewBrowserTab = useCallback((url: string, paneId?: string) => {
             paneData.browserTitle = 'New Tab';
 
             // Trigger re-render
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
             return;
         }
     }
@@ -4178,7 +4184,7 @@ useEffect(() => {
             paneData.browserTitle = 'New Tab';
 
             // Trigger re-render
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
         } else {
             // No active browser - create a new browser pane
             createNewBrowser('about:blank');
@@ -4372,29 +4378,31 @@ const handleBrowserDialogNavigate = (url) => {
     };
 
     // Main input submit handler
-    const handleInputSubmit = async (e: React.FormEvent, options?: { voiceInput?: boolean; disableThinking?: boolean; genParams?: { temperature: number; top_p: number; top_k: number; max_tokens: number } }) => {
+    const handleInputSubmit = async (e: React.FormEvent, options?: { voiceInput?: boolean; disableThinking?: boolean; genParams?: { temperature: number; top_p: number; top_k: number; max_tokens: number }; inputText?: string; uploadedFiles?: any[]; mcpServerPath?: string; selectedMcpTools?: string[]; contextFiles?: any[]; paneId?: string }) => {
         e.preventDefault();
         const wasVoiceInput = options?.voiceInput || false;
         const disableThinking = options?.disableThinking || false;
         const genParams = options?.genParams || { temperature: 0.7, top_p: 0.9, top_k: 40, max_tokens: 4096 };
+        const submittedInput = options?.inputText ?? input;
+        const targetPaneId = options?.paneId ?? activeContentPaneId;
 
         // Get pane-specific execution mode and selectedJinx
-        const paneExecMode = activeContentPaneId ? (contentDataRef.current[activeContentPaneId]?.executionMode || 'chat') : 'chat';
-        const paneSelectedJinx = activeContentPaneId ? (contentDataRef.current[activeContentPaneId]?.selectedJinx || null) : null;
+        const paneExecMode = targetPaneId ? (contentDataRef.current[targetPaneId]?.executionMode || 'chat') : 'chat';
+        const paneSelectedJinx = targetPaneId ? (contentDataRef.current[targetPaneId]?.selectedJinx || null) : null;
 
         const isJinxMode = paneExecMode !== 'chat' && paneSelectedJinx;
         const currentJinxInputs = isJinxMode ? (jinxInputValues[paneSelectedJinx.name] || {}) : {};
 
-        const hasContent = (input || '').trim() || uploadedFiles.length > 0 || (isJinxMode && Object.values(currentJinxInputs).some(val => val !== null && String(val).trim()));
+        const hasContent = (submittedInput || '').trim() || uploadedFiles.length > 0 || (isJinxMode && Object.values(currentJinxInputs).some(val => val !== null && String(val).trim()));
 
-        if (!hasContent || (!activeContentPaneId && !isJinxMode)) {
-            if (!isJinxMode && !activeContentPaneId) {
+        if (!hasContent || (!targetPaneId && !isJinxMode)) {
+            if (!isJinxMode && !targetPaneId) {
                 console.error("No active chat pane to send message to.");
             }
             return;
         }
 
-        const paneData = contentDataRef.current[activeContentPaneId];
+        const paneData = contentDataRef.current[targetPaneId];
         if (!paneData || paneData.contentType !== 'chat' || !paneData.contentId) {
             console.error("No active chat pane to send message to.");
             return;
@@ -4403,10 +4411,10 @@ const handleBrowserDialogNavigate = (url) => {
         const conversationId = paneData.contentId;
         const newStreamId = generateId();
 
-        streamToPaneRef.current[newStreamId] = activeContentPaneId;
+        streamToPaneRef.current[newStreamId] = targetPaneId;
         setIsStreaming(true);
 
-        let finalPromptForUserMessage = input;
+        let finalPromptForUserMessage = submittedInput;
         let jinxName = null;
         let jinxArgsForApi: any[] = [];
 
@@ -4488,14 +4496,14 @@ const handleBrowserDialogNavigate = (url) => {
                 }
 
                 if (paneExecMode === 'tool_agent') {
-                    finalPromptForUserMessage = `${input}
+                    finalPromptForUserMessage = `${submittedInput}
 
 Available context:
 ${contextPrompt}
 
 IMPORTANT: Propose changes as unified diffs, NOT full file contents.`;
                 } else {
-                    finalPromptForUserMessage = `${input}
+                    finalPromptForUserMessage = `${submittedInput}
 
 Context - currently open:
 ${contextPrompt}`;
@@ -4506,15 +4514,15 @@ ${contextPrompt}`;
         }
 
         // Check if we have selected branches for sub-branching
-        const branchMap = selectedBranches[activeContentPaneId];
+        const branchMap = selectedBranches[targetPaneId];
         const branchTargets = branchMap && branchMap.size > 0 ? Array.from(branchMap.values()) : [null];
-        console.log('[BRANCH] Reading selectedBranches for activeContentPaneId:', activeContentPaneId, 'targets:', branchTargets.length, branchTargets.map((b: any) => b?.id + ' ' + (b?.npc || b?.model)));
+        console.log('[BRANCH] Reading selectedBranches for targetPaneId:', targetPaneId, 'targets:', branchTargets.length, branchTargets.map((b: any) => b?.id + ' ' + (b?.npc || b?.model)));
 
         // Clear selected branches after using them
         if (branchMap && branchMap.size > 0) {
             setSelectedBranches(prev => {
                 const next = { ...prev };
-                delete next[activeContentPaneId];
+                delete next[targetPaneId];
                 return next;
             });
         }
@@ -4524,7 +4532,7 @@ ${contextPrompt}`;
         }
 
         // IMMEDIATELY clear input and files so user can type next message
-        const savedInput = input;
+        const savedInput = submittedInput;
         const savedFiles = [...uploadedFiles];
         setInput('');
         setUploadedFiles([]);
@@ -4580,10 +4588,10 @@ ${contextPrompt}`;
 
             paneData.chatMessages.allMessages.push(userMessage, assistantPlaceholder);
             paneData.chatMessages.messages = paneData.chatMessages.allMessages.slice(-(paneData.chatMessages.displayedMessageCount || 20));
-            streamToPaneRef.current[branchStreamId] = activeContentPaneId;
+            streamToPaneRef.current[branchStreamId] = targetPaneId;
 
             // Trigger render immediately so messages show before API call
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
 
             try {
                 // For sub-branching, use the branch's NPC info
@@ -4646,7 +4654,7 @@ ${contextPrompt}`;
         paneData.chatMessages.messages = paneData.chatMessages.allMessages.slice(-(paneData.chatMessages.displayedMessageCount || 20));
         paneData.chatStats = getConversationStats(paneData.chatMessages.allMessages);
 
-        setRootLayoutNode(prev => ({ ...prev }));
+        if (targetPaneId) paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId: targetPaneId } }));
 
         // Set streaming false only when all streams complete (handled by stream listeners)
         if (branchTargets.length === 1 && branchTargets[0] === null) {
@@ -4688,7 +4696,7 @@ ${contextPrompt}`;
             setIsStreaming(false);
         }
 
-        setRootLayoutNode(prev => ({ ...prev }));
+        if (activeContentPaneId) paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId: activeContentPaneId } }));
 
         try {
             await window.api.interruptStream(streamIdToInterrupt);
@@ -4696,7 +4704,7 @@ ${contextPrompt}`;
         } catch (error) {
             console.error(`[REACT] handleInterruptStream: API call to interrupt stream ${streamIdToInterrupt} failed:`, error);
             streamingMessage.content += " [Interruption API call failed]";
-            setRootLayoutNode(prev => ({ ...prev }));
+            if (activeContentPaneId) paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId: activeContentPaneId } }));
         }
     };
 
@@ -4797,7 +4805,7 @@ ${contextPrompt}`;
             activePaneData.chatMessages.messages = activePaneData.chatMessages.allMessages.slice(-(activePaneData.chatMessages.displayedMessageCount || 20));
             activePaneData.chatStats = getConversationStats(activePaneData.chatMessages.allMessages);
 
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
             setSelectedMessages(new Set());
             setMessageContextMenuPos(null);
             setMessageSelectionMode(false);
@@ -4917,7 +4925,7 @@ ${contextPrompt}`;
                 -(activePaneData.chatMessages.displayedMessageCount || 20)
             );
 
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
 
             const selectedModelObj = availableModels.find((m: any) => m.value === selectedModel);
             const providerToUse = selectedModelObj ? selectedModelObj.provider : currentProvider;
@@ -4965,7 +4973,7 @@ ${contextPrompt}`;
                 setIsStreaming(false);
             }
 
-            setRootLayoutNode(prev => ({ ...prev }));
+            notifyAllPanes();
         }
     };
 
@@ -5340,15 +5348,18 @@ ${contextPrompt}`;
             setZenModePaneId(prev => prev === paneId ? null : paneId);
         },
         generateId,
-        findPanePath: findNodePath
-    }), [rootLayoutNode, contentDataRef, activeContentPaneId, setActiveContentPaneId, performSplit, closeContentPane, updateContentPane]);
+        findPanePath: findNodePath,
+        notifyPaneUpdate: (paneId: string) => {
+            paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId } }));
+        },
+    }), [rootLayoutNode, contentDataRef, activeContentPaneId, setActiveContentPaneId, performSplit, closeContentPane, updateContentPane, paneUpdateEmitter]);
 
     usePaneAwareStreamListeners(
         config,
         listenersAttached,
         streamToPaneRef,
         contentDataRef,
-        setRootLayoutNode,
+        paneUpdateEmitter,
         setIsStreaming,
         setAiEditModal,
         parseAgenticResponse,
@@ -6080,7 +6091,7 @@ ${contextPrompt}`;
                     if (conversation?.id && contentDataRef.current[paneId]) {
                         contentDataRef.current[paneId].contentId = conversation.id;
                         contentDataRef.current[paneId].conversationId = conversation.id;
-                        setRootLayoutNode(prev => ({ ...prev }));
+                        notifyAllPanes();
                     }
                 } catch (e) {
                     console.error('Failed to create conversation for preset chat pane:', e);
@@ -6778,7 +6789,7 @@ ${contextPrompt}`;
                             );
                         }
 
-                        setRootLayoutNode(prev => ({ ...prev }));
+                        notifyAllPanes();
 
                         try {
                             // Execute streaming command
@@ -6817,7 +6828,7 @@ ${contextPrompt}`;
                             if (Object.keys(streamToPaneRef.current).length === 0) {
                                 setIsStreaming(false);
                             }
-                            setRootLayoutNode(prev => ({ ...prev }));
+                            notifyAllPanes();
                         }
 
                         refreshConversations();
@@ -7110,7 +7121,7 @@ const setPaneExecutionMode = useCallback(async (paneId: string, mode: string) =>
     }
 
     // Trigger re-render
-    setRootLayoutNode(prev => ({ ...prev }));
+    notifyAllPanes();
 }, [currentPath, mcpServerPath]);
 
 const getPaneSelectedJinx = useCallback((paneId: string) => {
@@ -7124,7 +7135,7 @@ const setPaneSelectedJinx = useCallback((paneId: string, jinx: any) => {
         contentDataRef.current[paneId].selectedJinx = jinx;
     }
     // Trigger re-render
-    setRootLayoutNode(prev => ({ ...prev }));
+    notifyAllPanes();
 }, []);
 
 // Per-pane dropdown state
@@ -7139,11 +7150,13 @@ const setPaneShowJinxDropdown = useCallback((paneId: string, show: boolean) => {
         contentDataRef.current[paneId].showJinxDropdown = show;
     }
     // Trigger re-render
-    setRootLayoutNode(prev => ({ ...prev }));
+    notifyAllPanes();
 }, []);
 
 // Build chatInputProps function that returns props for a specific pane
-const getChatInputProps = useCallback((paneId: string) => ({
+const getChatInputProps = useCallback((paneId: string) => {
+    const notifyUpdate = () => paneUpdateEmitter.dispatchEvent(new CustomEvent('pane-update', { detail: { paneId } }));
+    return {
     input, setInput, inputHeight, setInputHeight,
     isInputMinimized, setIsInputMinimized, isInputExpanded, setIsInputExpanded,
     isResizingInput, setIsResizingInput,
@@ -7157,20 +7170,26 @@ const getChatInputProps = useCallback((paneId: string) => ({
     paneVersion,
     // Per-pane execution mode
     executionMode: getPaneExecutionMode(paneId),
-    setExecutionMode: (mode: string) => setPaneExecutionMode(paneId, mode),
+    setExecutionMode: (mode: string) => { setPaneExecutionMode(paneId, mode); notifyUpdate(); },
     selectedJinx: getPaneSelectedJinx(paneId),
-    setSelectedJinx: (jinx: any) => setPaneSelectedJinx(paneId, jinx),
+    setSelectedJinx: (jinx: any) => { setPaneSelectedJinx(paneId, jinx); notifyUpdate(); },
     jinxInputValues, setJinxInputValues, jinxesToDisplay,
     // Per-pane dropdown state
     showJinxDropdown: getPaneShowJinxDropdown(paneId),
     setShowJinxDropdown: (show: boolean) => setPaneShowJinxDropdown(paneId, show),
-    availableModels, modelsLoading, modelsError, currentModel, setCurrentModel,
-    currentProvider, setCurrentProvider, favoriteModels, toggleFavoriteModel,
+    availableModels, modelsLoading, modelsError,
+    currentModel, setCurrentModel: (v: any) => { setCurrentModel(v); notifyUpdate(); },
+    currentProvider, setCurrentProvider: (v: any) => { setCurrentProvider(v); notifyUpdate(); },
+    favoriteModels, toggleFavoriteModel,
     showAllModels, setShowAllModels, modelsToDisplay, ollamaToolModels, setError,
-    availableNPCs, npcsLoading, npcsError, currentNPC, setCurrentNPC,
+    availableNPCs, npcsLoading, npcsError,
+    currentNPC, setCurrentNPC: (v: any) => { setCurrentNPC(v); notifyUpdate(); },
     // Multi-select for broadcast - persisted at Enpistu level
-    selectedModels, setSelectedModels, selectedNPCs, setSelectedNPCs,
-    broadcastMode, setBroadcastMode,
+    selectedModels,
+    setSelectedModels: ((v: any) => { setSelectedModels(v); notifyUpdate(); }) as React.Dispatch<React.SetStateAction<string[]>>,
+    selectedNPCs,
+    setSelectedNPCs: ((v: any) => { setSelectedNPCs(v); notifyUpdate(); }) as React.Dispatch<React.SetStateAction<string[]>>,
+    broadcastMode, setBroadcastMode: (v: any) => { setBroadcastMode(v); notifyUpdate(); },
     availableMcpServers, mcpServerPath, setMcpServerPath,
     selectedMcpTools, setSelectedMcpTools, availableMcpTools, setAvailableMcpTools,
     mcpToolsLoading, setMcpToolsLoading, mcpToolsError, setMcpToolsError,
@@ -7310,7 +7329,7 @@ const getChatInputProps = useCallback((paneId: string) => ({
         activePaneData.chatMessages.messages = allMessages.slice(-(activePaneData.chatMessages.displayedMessageCount || 20));
         setInput('');
         setUploadedFiles([]);
-        setRootLayoutNode(prev => ({ ...prev }));
+        notifyAllPanes();
 
         // Execute all in parallel
         const executePromises = allExecutions.map(async (exec) => {
@@ -7352,7 +7371,7 @@ const getChatInputProps = useCallback((paneId: string) => ({
         setSelectedModels(currentModel ? [currentModel] : []);
         setSelectedNPCs([]);
     },
-}), [
+}; }, [
     input, inputHeight, isInputMinimized, isInputExpanded, isResizingInput,
     isStreaming, handleInputSubmit, handleInterruptStream,
     uploadedFiles, contextFiles, contextFilesCollapsed, currentPath,
@@ -7367,6 +7386,7 @@ const getChatInputProps = useCallback((paneId: string) => ({
     broadcastMode, setBroadcastMode,
     availableMcpServers, mcpServerPath, selectedMcpTools, availableMcpTools,
     mcpToolsLoading, mcpToolsError, showMcpServersDropdown, activeConversationId, findNodePath, performSplit,
+    paneUpdateEmitter,
 ]);
 
 // Pane renderer registry - maps contentType to render function
@@ -7468,6 +7488,7 @@ const layoutComponentApi = useMemo(() => ({
     // Pane locking (per-pane)
     lockedPanes,
     togglePaneLocked: (nodeId: string) => { setLockedPanes(prev => { const next = new Set(prev); if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId); localStorage.setItem('incognide_lockedPanes', JSON.stringify([...next])); return next; }); },
+    paneUpdateEmitter,
 }), [
     findNodeByPath, findNodePath, activeContentPaneId,
     draggedItem, dropTarget, updateContentPane, performSplit, closeContentPane,
@@ -8486,7 +8507,7 @@ const renderMainContent = () => {
                                     if (response && !response.error) {
                                         contentDataRef.current[newPaneId].fileContent = response.content;
                                         contentDataRef.current[newPaneId].fileChanged = false;
-                                        setRootLayoutNode(prev => ({ ...prev }));
+                                        notifyAllPanes();
                                     }
                                 } catch (err) {
                                     console.error('Error loading file content:', err);
@@ -9160,10 +9181,10 @@ const renderMainContent = () => {
                     setCurrentBranchId(branchId);
                     activePaneData.chatMessages.allMessages = [...branch.messages];
                     activePaneData.chatMessages.messages = branch.messages.slice(-(activePaneData.chatMessages.displayedMessageCount || 50));
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyAllPanes();
                 } else if (branchId === 'main') {
                     setCurrentBranchId('main');
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyAllPanes();
                 }
             }}
             allMessages={activeContentPaneId ? contentDataRef.current[activeContentPaneId]?.chatMessages?.allMessages || [] : []}
@@ -9174,7 +9195,7 @@ const renderMainContent = () => {
                         ...prev,
                         [activeContentPaneId]: path
                     }));
-                    setRootLayoutNode(prev => ({ ...prev }));
+                    notifyAllPanes();
                 }
             }}
         />

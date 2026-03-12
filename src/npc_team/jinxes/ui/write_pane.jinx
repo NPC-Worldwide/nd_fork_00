@@ -1,0 +1,18 @@
+jinx_name: write_pane
+description: >
+  Write content to any pane. Editor: replaces file content. Document: writes
+  text (position: replace, end, start, cursor). Spreadsheet: pass JSON array
+  of {row, col, value}. Presentation: pass JSON {shapeIndex, text, slideIndex?}.
+  Terminal: sends as command.
+inputs:
+  - content
+  - { pane_id: "active" }
+  - { position: "replace" }
+steps:
+  - name: write_pane
+    engine: incognide
+    action: write_pane
+    args:
+      content: "{{ content }}"
+      paneId: "{{ pane_id }}"
+      position: "{{ position }}"

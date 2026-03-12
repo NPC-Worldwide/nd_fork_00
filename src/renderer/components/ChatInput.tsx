@@ -145,7 +145,60 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
     const [showMcpServersDropdown, setShowMcpServersDropdown] = useState(false);
     const [localMcpServers, setLocalMcpServers] = useState<any[]>([]);
 
+    // NPC-resolved tools (from NPC config: jinxes + mcp_servers + python tools)
+    const [npcResolvedTools, setNpcResolvedTools] = useState<any[]>([]);
+    const [teamServers, setTeamServers] = useState<any[]>([]);
+    const [npcToolsLoading, setNpcToolsLoading] = useState(false);
+    // Track which MCP servers are enabled (multi-select)
+    const [enabledServers, setEnabledServers] = useState<Set<string>>(new Set());
+
+    const toggleServer = async (serverPath: string) => {
+        const isEnabled = enabledServers.has(serverPath);
+        if (isEnabled) {
+            // Remove this server's tools
+            const serverLabel = getFileName(serverPath)?.replace(/\.py$/, '') || serverPath;
+            setEnabledServers(prev => { const next = new Set(prev); next.delete(serverPath); return next; });
+            setAvailableMcpTools(prev => prev.filter((t: any) => t._serverPath !== serverPath));
+            setSelectedMcpTools(prev => {
+                const removedNames = new Set(
+                    availableMcpTools.filter((t: any) => t._serverPath === serverPath).map((t: any) => t.function?.name)
+                );
+                return prev.filter(n => !removedNames.has(n));
+            });
+        } else {
+            // Add this server's tools
+            setEnabledServers(prev => new Set(prev).add(serverPath));
+            setMcpToolsLoading(true);
+            try {
+                const res = await (window as any).api.listMcpTools({ serverPath, currentPath });
+                if (!res.error) {
+                    const serverLabel = getFileName(serverPath)?.replace(/\.py$/, '') || serverPath;
+                    const newTools = (res.tools || []).map((t: any) => ({
+                        ...t,
+                        _source: t._source || `mcp:${serverLabel}`,
+                        _serverPath: serverPath,
+                    }));
+                    setAvailableMcpTools(prev => {
+                        const existingNames = new Set(prev.map((t: any) => t.function?.name));
+                        const unique = newTools.filter((t: any) => !existingNames.has(t.function?.name));
+                        return [...prev, ...unique];
+                    });
+                    setSelectedMcpTools(prev => {
+                        const newNames = newTools.map((t: any) => t.function?.name).filter(Boolean);
+                        return [...new Set([...prev, ...newNames])];
+                    });
+                }
+            } catch (err: any) {
+                console.error('[MCP] Failed to load tools from server:', err);
+            } finally {
+                setMcpToolsLoading(false);
+            }
+        }
+    };
+
+    // Legacy single-server loader (kept for backward compat / auto-load)
     const loadToolsForServer = async (serverPath: string) => {
+        setEnabledServers(new Set([serverPath]));
         setMcpToolsLoading(true);
         setMcpToolsError(null);
         try {
@@ -155,7 +208,12 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                 setAvailableMcpTools([]);
                 setSelectedMcpTools([]);
             } else {
-                const tools = res.tools || [];
+                const serverLabel = getFileName(serverPath)?.replace(/\.py$/, '') || serverPath;
+                const tools = (res.tools || []).map((t: any) => ({
+                    ...t,
+                    _source: t._source || `mcp:${serverLabel}`,
+                    _serverPath: serverPath,
+                }));
                 setAvailableMcpTools(tools);
                 setSelectedMcpTools(tools.map((t: any) => t.function?.name).filter(Boolean));
             }
@@ -167,11 +225,51 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         }
     };
 
+    // Load NPC-resolved tools when NPC changes or tool_agent mode activates
+    const loadNpcTools = async (npcName: string) => {
+        if (!npcName) return;
+        setNpcToolsLoading(true);
+        try {
+            // Try local npc_team first, fall back to incognide team path
+            const localTeam = currentPath ? `${currentPath}/npc_team` : '';
+            const teamPath = localTeam || '';
+            const url = `${BACKEND_URL}/api/npc_tools?npc=${encodeURIComponent(npcName)}&team_path=${encodeURIComponent(teamPath)}&currentPath=${encodeURIComponent(currentPath || '')}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.error) {
+                console.error('[NPC Tools] Error:', data.error);
+            } else {
+                const npcTools = data.npc_tools || [];
+                setNpcResolvedTools(npcTools);
+                setTeamServers(data.team_servers || []);
+                const npcToolDefs = npcTools.map((t: any) => ({
+                    function: { name: t.name, description: t.description || '' },
+                    _source: t.source,
+                    _serverPath: '__npc__',
+                }));
+                // Replace all tools with just the NPC's tools — don't merge
+                setAvailableMcpTools(npcToolDefs);
+                const npcToolNames = npcTools.filter((t: any) => t.enabled).map((t: any) => t.name);
+                setSelectedMcpTools(npcToolNames);
+            }
+        } catch (err) {
+            console.error('[NPC Tools] Failed to load:', err);
+        } finally {
+            setNpcToolsLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (availableMcpServers.length > 0) {
             setLocalMcpServers(availableMcpServers);
         }
     }, [availableMcpServers]);
+
+    // When NPC changes in tool_agent mode, load its resolved tools
+    useEffect(() => {
+        if (executionMode !== 'tool_agent' || !currentNPC) return;
+        loadNpcTools(currentNPC);
+    }, [currentNPC, executionMode]);
 
     useEffect(() => {
         if (executionMode !== 'tool_agent' || !currentPath) return;
@@ -181,7 +279,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                 if (res?.servers?.length) {
                     setLocalMcpServers(res.servers);
 
-                    if (!mcpServerPath) {
+                    if (!mcpServerPath && !currentNPC && enabledServers.size === 0) {
                         const firstPath = res.servers[0].serverPath;
                         setMcpServerPath(firstPath);
                         loadToolsForServer(firstPath);
@@ -1234,7 +1332,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
 
                 {executionMode === 'tool_agent' && (
                     <div className="px-2 pt-1 border-b theme-border overflow-visible">
-                        <div className="relative w-1/2 flex items-center gap-1" ref={mcpDropdownRef}>
+                        <div className="relative w-full flex items-center gap-1" ref={mcpDropdownRef}>
                             <button
                                 type="button"
                                 className="theme-input text-xs flex-1 text-left px-2 py-1 flex items-center justify-between gap-1 rounded border"
@@ -1242,131 +1340,159 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                 onClick={() => setShowMcpServersDropdown((p: boolean) => !p)}
                             >
                                 <span className="truncate">
-                                    {mcpServerPath
-                                        ? getFileName(mcpServerPath)?.replace(/\.py$/, '') || mcpServerPath
-                                        : `Select MCP Server (${localMcpServers.length})`}
+                                    Tools ({selectedMcpTools.length}/{availableMcpTools.length})
+                                    {enabledServers.size > 0 && ` · ${enabledServers.size} server${enabledServers.size > 1 ? 's' : ''}`}
                                 </span>
-                                {selectedMcpTools.length > 0 && (
-                                    <span className="text-[10px] bg-blue-500/30 text-blue-300 px-1.5 rounded-full">
-                                        {selectedMcpTools.length}
-                                    </span>
-                                )}
+                                {(npcToolsLoading || mcpToolsLoading) && <span className="text-[10px] theme-text-muted animate-pulse">loading...</span>}
                                 <ChevronDown size={12} className="flex-shrink-0" />
                             </button>
                             <button
                                 type="button"
                                 onClick={async (e) => {
                                     e.stopPropagation();
+                                    if (currentNPC) loadNpcTools(currentNPC);
                                     try {
                                         const res = await (window as any).api.getMcpServers(currentPath);
-                                        if (res?.servers) {
-                                            setLocalMcpServers(res.servers);
-                                        }
+                                        if (res?.servers) setLocalMcpServers(res.servers);
                                     } catch (err) {
                                         console.error('[MCP] Refresh failed:', err);
                                     }
                                 }}
                                 className="p-1 theme-hover rounded flex-shrink-0"
-                                title="Refresh servers"
+                                title="Refresh tools & servers"
                             >
                                 <RefreshCw size={12} />
                             </button>
                             {showMcpServersDropdown && (
                                 <div
-                                    className="absolute z-[100] w-full bottom-full mb-1 bg-black/90 border theme-border rounded shadow-lg max-h-64 overflow-y-auto"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Escape') {
-                                            setShowMcpServersDropdown(false);
-                                        }
-                                    }}
+                                    className="absolute z-[100] w-full bottom-full mb-1 bg-black/90 border theme-border rounded shadow-lg max-h-[400px] overflow-y-auto"
+                                    onKeyDown={(e) => { if (e.key === 'Escape') setShowMcpServersDropdown(false); }}
                                     tabIndex={-1}
                                 >
-                                    {localMcpServers.length === 0 && (
-                                        <div className="px-2 py-1 text-xs theme-text-muted">No MCP servers found</div>
-                                    )}
-                                    {[...new Set(localMcpServers.map((s: any) => s.origin))].map(origin => {
-                                        const serversForOrigin = localMcpServers.filter((s: any) => s.origin === origin);
-                                        if (serversForOrigin.length === 0) return null;
-                                        const originLabel = origin?.startsWith('auto:') ? origin.slice(5) : origin === 'global' ? 'Global' : origin === 'project' ? 'Project' : origin;
-                                        return (
-                                            <div key={origin}>
-                                                <div className="px-2 py-1 text-[10px] uppercase theme-text-muted border-b theme-border">
-                                                    {originLabel}
-                                                </div>
-                                                {serversForOrigin.map((srv: any) => (
-                                                    <div key={srv.serverPath} className="border-b theme-border last:border-b-0">
-                                                        <div
-                                                            className={`px-2 py-1 text-xs theme-hover cursor-pointer flex items-center gap-2 ${srv.serverPath === mcpServerPath ? 'bg-blue-500/20' : ''}`}
-                                                            onClick={() => {
-                                                                setMcpServerPath(srv.serverPath);
-                                                                loadToolsForServer(srv.serverPath);
-                                                            }}
-                                                        >
-                                                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                                                srv.status === 'running' ? 'bg-green-400' :
-                                                                srv.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'
-                                                            }`} />
-                                                            <span className="truncate">{getFileName(srv.serverPath)?.replace(/\.py$/, '') || srv.serverPath}</span>
-                                                        </div>
-                                                        {srv.serverPath === mcpServerPath && (
-                                                            <div className="px-3 py-1 space-y-1">
-                                                                {mcpToolsLoading && <div className="text-xs theme-text-muted">Loading MCP tools...</div>}
-                                                                {mcpToolsError && <div className="text-xs text-red-400">Error: {mcpToolsError}</div>}
-                                                                {!mcpToolsLoading && !mcpToolsError && (
-                                                                    <div className="flex flex-col gap-1">
-                                                                        {availableMcpTools.length > 0 && (
-                                                                            <div className="flex gap-2 px-1 py-0.5 border-b theme-border">
-                                                                                <button onClick={() => setSelectedMcpTools(availableMcpTools.map((t: any) => t.function?.name).filter(Boolean))}
-                                                                                    className="text-[10px] text-blue-400 hover:underline">All</button>
-                                                                                <button onClick={() => setSelectedMcpTools([])}
-                                                                                    className="text-[10px] text-blue-400 hover:underline">None</button>
-                                                                                <span className="text-[10px] theme-text-muted ml-auto">
-                                                                                    {selectedMcpTools.length}/{availableMcpTools.length}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
-                                                                        {availableMcpTools.length === 0 && (
-                                                                            <div className="text-xs theme-text-muted">No tools available.</div>
-                                                                        )}
-                                                                        {availableMcpTools.map((tool: any) => {
-                                                                            const name = tool.function?.name || '';
-                                                                            const desc = tool.function?.description || '';
-                                                                            if (!name) return null;
-                                                                            const checked = selectedMcpTools.includes(name);
-                                                                            return (
-                                                                                <details key={name} className="bg-black/30 border theme-border rounded px-2 py-1">
-                                                                                    <summary className="flex items-center gap-2 text-xs theme-text-primary cursor-pointer">
-                                                                                        <input
-                                                                                            type="checkbox"
-                                                                                            checked={checked}
-                                                                                            disabled={isStreaming}
-                                                                                            onClick={(e) => e.stopPropagation()}
-                                                                                            onChange={() => {
-                                                                                                setSelectedMcpTools((prev: string[]) => {
-                                                                                                    if (prev.includes(name)) {
-                                                                                                        return prev.filter((n: string) => n !== name);
-                                                                                                    }
-                                                                                                    return [...prev, name];
-                                                                                                });
-                                                                                            }}
-                                                                                        />
-                                                                                        <span>{name}</span>
-                                                                                    </summary>
-                                                                                    <div className="ml-6 text-[11px] theme-text-muted whitespace-pre-wrap">
-                                                                                        {desc || 'No description.'}
-                                                                                    </div>
-                                                                                </details>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                    {/* Servers with checkboxes to toggle on/off */}
+                                    {(localMcpServers.length > 0 || teamServers.length > 0) && (
+                                        <div className="border-b theme-border">
+                                            <div className="px-2 py-1 text-[10px] uppercase theme-text-muted font-semibold bg-black/50">
+                                                Servers
                                             </div>
-                                        );
-                                    })}
+                                            {localMcpServers.map((srv: any) => {
+                                                const isOn = enabledServers.has(srv.serverPath);
+                                                return (
+                                                    <div
+                                                        key={srv.serverPath}
+                                                        className={`px-2 py-1.5 text-xs cursor-pointer flex items-center gap-2 theme-hover ${isOn ? 'bg-blue-500/10' : ''}`}
+                                                        onClick={() => toggleServer(srv.serverPath)}
+                                                    >
+                                                        <input type="checkbox" checked={isOn} readOnly className="pointer-events-none" />
+                                                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                                            srv.status === 'running' ? 'bg-green-400' :
+                                                            srv.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'
+                                                        }`} />
+                                                        <span className="truncate theme-text-primary">{getFileName(srv.serverPath)?.replace(/\.py$/, '') || srv.serverPath}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {teamServers.map((srv: any, idx: number) => {
+                                                const serverPath = srv.path || srv.url || '';
+                                                const label = srv.label || serverPath || `Team Server ${idx + 1}`;
+                                                const isOn = enabledServers.has(serverPath);
+                                                if (!serverPath) return null;
+                                                return (
+                                                    <div
+                                                        key={`team-${idx}`}
+                                                        className={`px-2 py-1.5 text-xs cursor-pointer flex items-center gap-2 theme-hover ${isOn ? 'bg-blue-500/10' : ''}`}
+                                                        onClick={() => toggleServer(serverPath)}
+                                                    >
+                                                        <input type="checkbox" checked={isOn} readOnly className="pointer-events-none" />
+                                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-gray-400" />
+                                                        <span className="truncate theme-text-primary">{getFileName(label)?.replace(/\.py$/, '') || label}</span>
+                                                        <span className="text-[9px] theme-text-muted ml-auto">team</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* Tools grouped by source */}
+                                    {availableMcpTools.length > 0 && (
+                                        <div>
+                                            {/* Global All/None */}
+                                            <div className="flex gap-2 px-2 py-1 border-b theme-border sticky top-0 bg-black/90 z-10">
+                                                <span className="text-[10px] theme-text-muted font-semibold uppercase">Tools</span>
+                                                <button onClick={() => setSelectedMcpTools(availableMcpTools.map((t: any) => t.function?.name).filter(Boolean))}
+                                                    className="text-[10px] text-blue-400 hover:underline ml-auto">All</button>
+                                                <button onClick={() => setSelectedMcpTools([])}
+                                                    className="text-[10px] text-blue-400 hover:underline">None</button>
+                                                <span className="text-[10px] theme-text-muted">
+                                                    {selectedMcpTools.length}/{availableMcpTools.length}
+                                                </span>
+                                            </div>
+
+                                            {(() => {
+                                                const sources = [...new Set(availableMcpTools.map((t: any) => t._source || 'tools'))];
+                                                return sources.map(source => {
+                                                    const toolsInSource = availableMcpTools.filter((t: any) => (t._source || 'tools') === source);
+                                                    if (toolsInSource.length === 0) return null;
+                                                    const sourceLabel = source.startsWith('mcp:') ? source.slice(4) : source;
+                                                    const selectedInSource = toolsInSource.filter((t: any) => selectedMcpTools.includes(t.function?.name)).length;
+                                                    const allInSourceSelected = selectedInSource === toolsInSource.length;
+                                                    return (
+                                                        <div key={source}>
+                                                            <div className="px-2 py-1 text-[10px] theme-text-muted border-b theme-border flex items-center gap-2 bg-black/30">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={allInSourceSelected}
+                                                                    onChange={() => {
+                                                                        const names = toolsInSource.map((t: any) => t.function?.name).filter(Boolean);
+                                                                        if (allInSourceSelected) {
+                                                                            setSelectedMcpTools(prev => prev.filter(n => !names.includes(n)));
+                                                                        } else {
+                                                                            setSelectedMcpTools(prev => [...new Set([...prev, ...names])]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <span className="uppercase font-semibold">{sourceLabel}</span>
+                                                                <span className="text-[9px] ml-auto">{selectedInSource}/{toolsInSource.length}</span>
+                                                            </div>
+                                                            {toolsInSource.map((tool: any) => {
+                                                                const name = tool.function?.name || '';
+                                                                const desc = tool.function?.description || '';
+                                                                if (!name) return null;
+                                                                const checked = selectedMcpTools.includes(name);
+                                                                return (
+                                                                    <details key={name} className="border-b theme-border last:border-b-0">
+                                                                        <summary className="flex items-center gap-2 text-xs theme-text-primary cursor-pointer px-3 py-1 theme-hover">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={checked}
+                                                                                disabled={isStreaming}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={() => {
+                                                                                    setSelectedMcpTools((prev: string[]) =>
+                                                                                        prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+                                                                                    );
+                                                                                }}
+                                                                            />
+                                                                            <span>{name}</span>
+                                                                        </summary>
+                                                                        <div className="ml-9 px-2 pb-1 text-[11px] theme-text-muted whitespace-pre-wrap">
+                                                                            {desc || 'No description.'}
+                                                                        </div>
+                                                                    </details>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    )}
+
+                                    {availableMcpTools.length === 0 && !npcToolsLoading && !mcpToolsLoading && (
+                                        <div className="px-2 py-2 text-xs theme-text-muted text-center">
+                                            No tools loaded. Enable a server above.
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

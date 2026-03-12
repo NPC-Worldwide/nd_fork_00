@@ -1,0 +1,15 @@
+jinx_name: interact
+description: >
+  Run code/commands in any pane context. Browser: evaluates JavaScript.
+  Terminal: runs shell command. Spreadsheet: JS with {headers, data, XLSX}.
+  Document: JS eval. Presentation: JS eval.
+inputs:
+  - code
+  - { pane_id: "active" }
+steps:
+  - name: interact
+    engine: incognide
+    action: interact
+    args:
+      code: "{{ code }}"
+      paneId: "{{ pane_id }}"

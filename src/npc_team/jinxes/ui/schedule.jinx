@@ -1,0 +1,52 @@
+jinx_name: schedule
+description: >
+  Manage cron jobs. Actions: list (no args), add (needs schedule + command +
+  job_name), remove (needs job_name), status (needs job_name).
+  Schedule uses cron syntax, e.g. '*/5 * * * *' for every 5 minutes.
+inputs:
+  - action
+  - { schedule: "" }
+  - { command: "" }
+  - { job_name: "" }
+steps:
+  - name: schedule
+    engine: python
+    code: |
+      import requests, json as _json
+      _port = 5437
+      try:
+          import socket as _sock
+          for _p in [5437, 5337]:
+              try:
+                  _s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+                  _s.settimeout(0.3)
+                  _s.connect(('127.0.0.1', _p))
+                  _s.close()
+                  _port = _p
+                  break
+              except Exception:
+                  pass
+      except Exception:
+          pass
+      _base = f'http://127.0.0.1:{_port}/api/cron'
+      _act = context.get('action', 'list')
+      if _act == 'list':
+          _r = requests.get(f'{_base}/jobs', timeout=10)
+      elif _act == 'add':
+          _r = requests.post(f'{_base}/schedule', json={
+              'schedule': context.get('schedule', ''),
+              'command': context.get('command', ''),
+              'jobName': context.get('job_name', '')
+          }, timeout=10)
+      elif _act == 'remove':
+          _r = requests.post(f'{_base}/unschedule', json={
+              'jobName': context.get('job_name', '')
+          }, timeout=10)
+      elif _act == 'status':
+          _jn = context.get('job_name', '')
+          _r = requests.get(f'{_base}/status/{_jn}', timeout=10)
+      else:
+          output = f'Unknown action: {_act}. Use: list, add, remove, status'
+          _r = None
+      if _r is not None:
+          output = _json.dumps(_r.json(), indent=2)

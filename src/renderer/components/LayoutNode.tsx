@@ -324,6 +324,18 @@ export const LayoutNode = memo(({ node, path, component: componentRef }) => {
         const dragCounterRef = useRef(0);
         const [, forceRender] = useState(0);
 
+        useEffect(() => {
+            const emitter = componentRef.current?.paneUpdateEmitter;
+            if (!emitter) return;
+            const handler = (e: any) => {
+                if (e.detail?.paneId === node.id) {
+                    forceRender(n => n + 1);
+                }
+            };
+            emitter.addEventListener('pane-update', handler);
+            return () => emitter.removeEventListener('pane-update', handler);
+        }, [node.id]);
+
         const onDrop = (e, side) => {
             e.preventDefault();
             e.stopPropagation();

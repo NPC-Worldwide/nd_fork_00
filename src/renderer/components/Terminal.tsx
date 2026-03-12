@@ -295,6 +295,17 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
         setContextMenu(null);
     }, []);
 
+    const handleSelectAllAndCopy = useCallback(() => {
+        if (xtermInstance.current) {
+            xtermInstance.current.selectAll();
+            const selection = xtermInstance.current.getSelection();
+            if (selection) {
+                navigator.clipboard.writeText(selection);
+            }
+        }
+        setContextMenu(null);
+    }, []);
+
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1204,6 +1215,12 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
                             className="w-full px-3 py-1.5 text-left text-sm theme-text hover:bg-blue-500/20"
                         >
                             Select All
+                        </button>
+                        <button
+                            onClick={handleSelectAllAndCopy}
+                            className="w-full px-3 py-1.5 text-left text-sm theme-text hover:bg-blue-500/20"
+                        >
+                            Select All & Copy
                         </button>
                         <button
                             onClick={handleClear}

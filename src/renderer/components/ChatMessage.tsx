@@ -1,6 +1,8 @@
 import React, { memo, useState, useRef } from 'react';
 import { BACKEND_URL } from '../config';
 import MarkdownRenderer from './MarkdownRenderer';
+import { AgentPromptCard } from './AgentPrompt';
+import { ToolCallDisplay } from './ToolCallDisplay';
 import { Paperclip, Tag, Star, ChevronDown, ChevronUp, Volume2, VolumeX, Loader, RotateCcw, History, Cpu, Bot, Zap, Send, GitBranch, Columns, ChevronLeft, ChevronRight, SlidersHorizontal, Square, CheckSquare, Trash2 } from 'lucide-react';
 
 const highlightSearchTerm = (content: string, searchTerm: string): string => {
@@ -156,6 +158,18 @@ export const ChatMessage = memo(({
             setIsLoadingTTS(false);
         }
     };
+
+    // Prompt messages get their own rendering
+    if (message.role === 'prompt' && message.promptData) {
+        return (
+            <div
+                id={`message-${messageId}`}
+                className="max-w-[85%]"
+            >
+                <AgentPromptCard promptData={message.promptData} />
+            </div>
+        );
+    }
 
     return (
         <div
@@ -316,37 +330,8 @@ export const ChatMessage = memo(({
                                     </div>
                                 );
                             } else if (part.type === 'tool_call') {
-                                const tool = part.call;
-                                const argVal = tool.arguments !== undefined ? tool.arguments : tool.function?.arguments;
-                                const resultVal = tool.result_preview || '';
-                                const argDisplay = argVal && String(argVal).trim().length > 0
-                                    ? (typeof argVal === 'string' ? argVal : JSON.stringify(argVal, null, 2))
-                                    : 'No arguments';
-                                const resDisplay = resultVal && String(resultVal).trim().length > 0
-                                    ? (typeof resultVal === 'string' ? resultVal : JSON.stringify(resultVal, null, 2))
-                                    : null;
-                                const statusColor = tool.status === 'error' ? 'border-red-500' : (tool.status === 'complete' ? 'border-green-500' : 'border-blue-500');
                                 return (
-                                    <div key={partIdx} className={`my-2 px-3 py-2 theme-bg-tertiary rounded-md border-l-2 ${statusColor}`}>
-                                        <div className="text-xs text-blue-400 mb-1 font-semibold flex items-center gap-2">
-                                            <span>🛠 {tool.function?.name || tool.function_name || "Function"}</span>
-                                            {tool.status === 'running' && <span className="animate-pulse text-yellow-400">running...</span>}
-                                            {tool.status === 'complete' && <span className="text-green-400">✓</span>}
-                                            {tool.status === 'error' && <span className="text-red-400">✗</span>}
-                                        </div>
-                                        <div className="text-[11px] theme-text-muted mb-1">Args:</div>
-                                        <pre className="theme-bg-primary p-2 rounded text-xs overflow-x-auto my-1 theme-text-secondary max-h-32 overflow-y-auto">
-                                            {argDisplay}
-                                        </pre>
-                                        {resDisplay && (
-                                            <>
-                                                <div className="text-[11px] theme-text-muted mb-1">Result:</div>
-                                                <pre className="theme-bg-primary p-2 rounded text-xs overflow-x-auto my-1 theme-text-secondary max-h-32 overflow-y-auto">
-                                                    {resDisplay}
-                                                </pre>
-                                            </>
-                                        )}
-                                    </div>
+                                    <ToolCallDisplay key={partIdx} tool={part.call} />
                                 );
                             }
                             return null;
@@ -392,38 +377,9 @@ export const ChatMessage = memo(({
                             </button>
                         )}
                         {message.toolCalls && message.toolCalls.length > 0 && (
-                            <div className="mt-3 px-3 py-2 theme-bg-tertiary rounded-md border-l-2 border-blue-500">
-                                <div className="text-xs text-blue-400 mb-1 font-semibold">Function Calls:</div>
+                            <div className="mt-2">
                                 {message.toolCalls.map((tool, idx) => (
-                                    <div key={idx} className="mb-2 last:mb-0">
-                                        <div className="text-blue-300 text-sm">{tool.function_name || tool.function?.name || "Function"}</div>
-                                        {(() => {
-                                            const argVal = tool.arguments !== undefined ? tool.arguments : tool.function?.arguments;
-                                            const resultVal = tool.result_preview || '';
-                                            const argDisplay = argVal && String(argVal).trim().length > 0
-                                                ? (typeof argVal === 'string' ? argVal : JSON.stringify(argVal, null, 2))
-                                                : 'No arguments';
-                                            const resDisplay = resultVal && String(resultVal).trim().length > 0
-                                                ? (typeof resultVal === 'string' ? resultVal : JSON.stringify(resultVal, null, 2))
-                                                : null;
-                                            return (
-                                                <>
-                                                    <div className="text-[11px] theme-text-muted mb-1">Args:</div>
-                                                    <pre className="theme-bg-primary p-2 rounded text-xs overflow-x-auto my-1 theme-text-secondary">
-                                                        {argDisplay}
-                                                    </pre>
-                                                    {resDisplay && (
-                                                        <>
-                                                            <div className="text-[11px] theme-text-muted mb-1">Result:</div>
-                                                            <pre className="theme-bg-primary p-2 rounded text-xs overflow-x-auto my-1 theme-text-secondary">
-                                                                {resDisplay}
-                                                            </pre>
-                                                        </>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
+                                    <ToolCallDisplay key={idx} tool={tool} />
                                 ))}
                             </div>
                         )}

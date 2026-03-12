@@ -1,8 +1,0 @@
-jinx_name: list_actions
-description: List all available studio actions that can be performed in Incognide, organized by category.
-inputs: []
-steps:
-  - name: list_actions
-    engine: incognide
-    action: list_actions
-    args: {}

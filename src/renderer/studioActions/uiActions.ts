@@ -2,6 +2,119 @@
 
 import { registerAction, StudioContext, StudioActionResult } from './index';
 
+// ---------------------------------------------------------------------------
+// Prompt system — injects interactive prompts into chat message history
+// ---------------------------------------------------------------------------
+
+export interface PromptData {
+  id: string;
+  message: string;
+  prompt_type: 'choices' | 'confirm' | 'text' | 'form';
+  options: any;
+  response?: any;       // filled when user responds
+  respondedAt?: string;  // ISO timestamp
+}
+
+// Pending prompt resolvers — keyed by promptId
+const _pendingResolvers: Map<string, (value: any) => void> = new Map();
+
+/** Called by the UI when user responds to a prompt */
+export function resolvePrompt(promptId: string, value: any): void {
+  const resolve = _pendingResolvers.get(promptId);
+  if (resolve) {
+    resolve(value);
+    _pendingResolvers.delete(promptId);
+  }
+}
+
+function findChatPaneData(ctx: StudioContext, paneId?: string): any {
+  // Find the active chat pane
+  const targetId = (!paneId || paneId === 'active') ? ctx.activeContentPaneId : paneId;
+  const data = ctx.contentDataRef.current[targetId];
+  if (data?.contentType === 'chat') return { paneData: data, paneId: targetId };
+
+  // Fallback: search all panes for a chat
+  for (const [id, d] of Object.entries(ctx.contentDataRef.current)) {
+    if ((d as any)?.contentType === 'chat') return { paneData: d, paneId: id };
+  }
+  return { paneData: null, paneId: null };
+}
+
+async function prompt_user(
+  args: { message: string; prompt_type?: string; options?: any; pane_id?: string },
+  ctx: StudioContext
+): Promise<StudioActionResult> {
+  const { message, prompt_type = 'choices' } = args;
+  let options = args.options;
+
+  if (!message) {
+    return { success: false, error: 'message is required' };
+  }
+
+  // Parse options if it's a JSON string
+  if (typeof options === 'string') {
+    try { options = JSON.parse(options); } catch { options = []; }
+  }
+
+  const promptId = `prompt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const promptData: PromptData = {
+    id: promptId,
+    message,
+    prompt_type: prompt_type as PromptData['prompt_type'],
+    options: options || [],
+  };
+
+  // Inject a prompt message into the chat pane
+  const { paneData, paneId } = findChatPaneData(ctx, args.pane_id);
+  if (paneData?.chatMessages) {
+    const promptMsg = {
+      id: `msg_${promptId}`,
+      role: 'prompt',
+      content: message,
+      promptData,
+      timestamp: new Date().toISOString(),
+    };
+    paneData.chatMessages.allMessages.push(promptMsg);
+    paneData.chatMessages.messages = paneData.chatMessages.allMessages.slice(
+      -(paneData.chatMessages.displayedMessageCount || 20)
+    );
+
+    // Trigger re-render
+    if (ctx.notifyPaneUpdate && paneId) {
+      ctx.notifyPaneUpdate(paneId);
+    }
+  }
+
+  // Wait for user response
+  const userResponse = await new Promise<any>((resolve) => {
+    _pendingResolvers.set(promptId, resolve);
+  });
+
+  // Update the prompt message with the response
+  if (paneData?.chatMessages) {
+    const msg = paneData.chatMessages.allMessages.find(
+      (m: any) => m.id === `msg_${promptId}`
+    );
+    if (msg) {
+      msg.promptData = { ...promptData, response: userResponse, respondedAt: new Date().toISOString() };
+    }
+    paneData.chatMessages.messages = paneData.chatMessages.allMessages.slice(
+      -(paneData.chatMessages.displayedMessageCount || 20)
+    );
+    if (paneData.notifyUpdate) {
+      paneData.notifyUpdate();
+    }
+  }
+
+  return {
+    success: true,
+    promptId,
+    prompt_type,
+    response: userResponse,
+  };
+}
+
 async function notify(
   args: { message: string; type?: 'info' | 'success' | 'warning' | 'error'; duration?: number },
   _ctx: StudioContext
@@ -159,6 +272,7 @@ async function switch_npc(
   };
 }
 
+registerAction('prompt_user', prompt_user);
 registerAction('notify', notify);
 registerAction('confirm', confirm);
 registerAction('open_file_picker', open_file_picker);

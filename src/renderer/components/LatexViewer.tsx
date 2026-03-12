@@ -7,7 +7,7 @@ import {
     AlignLeft, Braces, RefreshCw, Download, Settings, BookOpen, Eye, EyeOff,
     Maximize2, Minimize2, FileCode, Terminal, ChevronRight, ChevronUp,
     Bold, Italic, Underline as UnderlineIcon, Type, MessageSquare, PanelLeft,
-    ChevronLeft, ChevronsUpDown
+    ChevronLeft, ChevronsUpDown, Copy, Wand2, GripHorizontal
 } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, ViewPlugin, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars } from '@codemirror/view';
@@ -622,6 +622,12 @@ const LatexViewer = ({
     const [isCompact, setIsCompact] = useState(false);
     const [showSavedFlash, setShowSavedFlash] = useState(false);
     const [openPdfOnBuild, setOpenPdfOnBuild] = useState(() => localStorage.getItem('latex_openPdfOnBuild') !== 'false');
+    const [texEngine, setTexEngine] = useState<string>(() => localStorage.getItem('latex_engine') || 'pdflatex');
+    const [logPanelHeight, setLogPanelHeight] = useState(112);
+    const [isResizingLog, setIsResizingLog] = useState(false);
+    const logResizeStartY = useRef(0);
+    const logResizeStartH = useRef(0);
+    const [copiedLog, setCopiedLog] = useState(false);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const toolbarRef = useCallback((node: HTMLDivElement | null) => {
         if (resizeObserverRef.current) {
@@ -1357,7 +1363,8 @@ const LatexViewer = ({
 
         try {
             const needsBibtex = bibFilePath || /\\bibliography\{|\\addbibresource\{|\\printbibliography/.test(content);
-            const res = await (window as any).api.compileLatex(filePath, { bibtex: !!needsBibtex });
+            const needsShellEscape = /\\begin\{minted\}|\\inputminted|\\mint\b/.test(content);
+            const res = await (window as any).api.compileLatex(filePath, { bibtex: !!needsBibtex, engine: texEngine, shellEscape: needsShellEscape });
             const log = res?.log || res?.error || '';
             setCompileLog(log);
 
@@ -1380,7 +1387,7 @@ const LatexViewer = ({
         } finally {
             setIsCompiling(false);
         }
-    }, [filePath, content, hasChanges, createAndAddPaneNodeToLayout, openPdfInSplit]);
+    }, [filePath, content, hasChanges, createAndAddPaneNodeToLayout, openPdfInSplit, texEngine]);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -1440,6 +1447,44 @@ const LatexViewer = ({
         document.addEventListener('click', handler);
         return () => document.removeEventListener('click', handler);
     }, []);
+
+    useEffect(() => {
+        if (!isResizingLog) return;
+        const onMouseMove = (e: MouseEvent) => {
+            const delta = logResizeStartY.current - e.clientY;
+            setLogPanelHeight(Math.max(60, Math.min(500, logResizeStartH.current + delta)));
+        };
+        const onMouseUp = () => setIsResizingLog(false);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        return () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+    }, [isResizingLog]);
+
+    const handleLogResizeStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        logResizeStartY.current = e.clientY;
+        logResizeStartH.current = logPanelHeight;
+        setIsResizingLog(true);
+    }, [logPanelHeight]);
+
+    const copyLog = useCallback(() => {
+        if (compileLog) {
+            navigator.clipboard.writeText(compileLog);
+            setCopiedLog(true);
+            setTimeout(() => setCopiedLog(false), 1500);
+        }
+    }, [compileLog]);
+
+    const proposeFix = useCallback(() => {
+        const errorSummary = parseErrors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
+        const prompt = `I have a LaTeX compilation error. Please analyze and propose a fix.\n\nFile: ${filePath}\nEngine: ${texEngine}\n\nErrors:\n${errorSummary}\n\nRelevant log output:\n\`\`\`\n${compileLog.slice(-2000)}\n\`\`\``;
+        navigator.clipboard.writeText(prompt);
+        // Dispatch event so chat can pick it up if desired
+        window.dispatchEvent(new CustomEvent('latex-propose-fix', { detail: { prompt, filePath, errors: parseErrors, log: compileLog } }));
+    }, [parseErrors, compileLog, filePath, texEngine]);
 
     const applyTemplate = useCallback((templateContent: string) => {
         if (content.trim() && !confirm('Replace current content with template?')) return;
@@ -1675,7 +1720,19 @@ const LatexViewer = ({
 
                 <div className="flex-1" />
 
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-1">
+                    <select
+                        value={texEngine}
+                        onChange={(e) => { setTexEngine(e.target.value); localStorage.setItem('latex_engine', e.target.value); }}
+                        className="h-7 px-1.5 text-[10px] bg-transparent border theme-border rounded theme-text-secondary focus:outline-none focus:border-blue-500/50"
+                        title="TeX engine"
+                    >
+                        <option value="pdflatex">pdflatex</option>
+                        <option value="lualatex">lualatex</option>
+                        <option value="xelatex">xelatex</option>
+                        <option value="latex">latex</option>
+                        <option value="platex">platex</option>
+                    </select>
                     <button
                         onClick={() => compile(openPdfOnBuild)}
                         disabled={isCompiling}
@@ -1802,7 +1859,7 @@ const LatexViewer = ({
                                 </div>
                                 <div>
                                     <div className="text-sm font-semibold theme-text-primary">Compiling...</div>
-                                    <div className="text-[11px] theme-text-muted mt-0.5">Running pdflatex</div>
+                                    <div className="text-[11px] theme-text-muted mt-0.5">Running {texEngine}</div>
                                 </div>
                             </div>
                         </div>
@@ -1853,6 +1910,14 @@ const LatexViewer = ({
                 <div className="flex flex-col flex-shrink-0 theme-bg-secondary" style={{
                     borderTop: '1px solid var(--theme-border)',
                 }}>
+                    {/* Drag handle for resizing */}
+                    <div
+                        onMouseDown={handleLogResizeStart}
+                        className="h-1.5 cursor-ns-resize flex items-center justify-center hover:bg-blue-500/10 transition-colors"
+                        title="Drag to resize"
+                    >
+                        <GripHorizontal size={10} className="theme-text-muted opacity-30" />
+                    </div>
                     <div className="flex items-center justify-between px-3 h-8" style={{ borderBottom: '1px solid var(--theme-border)' }}>
                         <div className="flex items-center gap-2.5">
                             <Terminal size={12} className="theme-text-muted" />
@@ -1870,11 +1935,36 @@ const LatexViewer = ({
                                 </span>
                             )}
                         </div>
-                        <button onClick={() => setShowLog(false)} className="w-5 h-5 flex items-center justify-center rounded-md theme-hover theme-text-muted transition-colors">
-                            <X size={11} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            {compileLog && (
+                                <button
+                                    onClick={copyLog}
+                                    className="h-5 px-1.5 flex items-center gap-1 rounded-md text-[9px] theme-text-muted theme-hover transition-colors"
+                                    title="Copy log to clipboard"
+                                >
+                                    {copiedLog ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+                                    {copiedLog ? 'Copied' : 'Copy'}
+                                </button>
+                            )}
+                            {compileStatus === 'error' && parseErrors.length > 0 && (
+                                <button
+                                    onClick={proposeFix}
+                                    className="h-5 px-1.5 flex items-center gap-1 rounded-md text-[9px] font-medium transition-colors"
+                                    style={{ color: isDarkMode ? '#c084fc' : '#7c3aed', background: 'rgba(139,92,246,0.1)' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.2)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.1)'; }}
+                                    title="Copy error context as LLM prompt to clipboard"
+                                >
+                                    <Wand2 size={10} />
+                                    Propose Fix
+                                </button>
+                            )}
+                            <button onClick={() => setShowLog(false)} className="w-5 h-5 flex items-center justify-center rounded-md theme-hover theme-text-muted transition-colors">
+                                <X size={11} />
+                            </button>
+                        </div>
                     </div>
-                    <div className="max-h-28 overflow-auto px-3 py-2 font-mono text-[10px] leading-relaxed">
+                    <div className="overflow-auto px-3 py-2 font-mono text-[10px] leading-relaxed" style={{ height: logPanelHeight }}>
                         {compileLog ? (
                             <pre className="whitespace-pre-wrap theme-text-muted">{compileLog}</pre>
                         ) : (

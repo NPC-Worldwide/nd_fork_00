@@ -81,37 +81,58 @@ function register(ctx) {
       const npcTeamSrc = path.join(appDir, 'npc_team');
       if (fs.existsSync(npcTeamSrc)) {
         await smartCopyRecursive(npcTeamSrc, destBase);
+
+        // Remove deployed files that no longer exist in bundled source
+        const collectSourceFiles = async (dir, relBase = '') => {
+          const result = new Set();
+          if (!fs.existsSync(dir)) return result;
+          const entries = await fsPromises.readdir(dir);
+          for (const entry of entries) {
+            const full = path.join(dir, entry);
+            const rel = relBase ? `${relBase}/${entry}` : entry;
+            const stat = await fsPromises.stat(full);
+            if (stat.isDirectory()) {
+              const sub = await collectSourceFiles(full, rel);
+              sub.forEach(s => result.add(s));
+            } else {
+              result.add(rel);
+            }
+          }
+          return result;
+        };
+        const sourceFiles = await collectSourceFiles(npcTeamSrc);
+        const cleanRemovedFiles = async (dir, relBase = '') => {
+          if (!fs.existsSync(dir)) return;
+          const entries = await fsPromises.readdir(dir);
+          for (const entry of entries) {
+            if (entry === '.deploy_manifest.json' || entry === '.git') continue;
+            const full = path.join(dir, entry);
+            const rel = relBase ? `${relBase}/${entry}` : entry;
+            const stat = await fsPromises.stat(full);
+            if (stat.isDirectory()) {
+              await cleanRemovedFiles(full, rel);
+              // Remove empty dirs
+              const remaining = await fsPromises.readdir(full);
+              if (remaining.length === 0) await fsPromises.rmdir(full);
+            } else if (!sourceFiles.has(rel)) {
+              // File exists in dest but not in source — only remove if it was deployed by us
+              const lastDeployedHash = manifest[rel];
+              const localHash = hashFile(full);
+              if (lastDeployedHash && localHash === lastDeployedHash) {
+                await fsPromises.unlink(full);
+                delete newManifest[rel];
+                log(`[NPC] Removed stale deployed file: ${rel}`);
+              }
+            }
+          }
+        };
+        await cleanRemovedFiles(destBase);
+
         log(`[NPC] Smart-deployed incognide npc_team to ${destBase}`);
       }
 
-      const mcpSrc = path.join(appDir, 'mcp_servers');
-      if (fs.existsSync(mcpSrc)) {
-        const mcpFiles = await fsPromises.readdir(mcpSrc);
-        for (const file of mcpFiles) {
-          if (file.endsWith('_mcp_server.py') || file === 'mcp_server.py') {
-            const src = path.join(mcpSrc, file);
-            const dest = path.join(destBase, file);
-            const srcContent = await fsPromises.readFile(src);
-            const srcHash = hashBuffer(srcContent);
-
-            if (fs.existsSync(dest)) {
-              const localHash = hashFile(dest);
-              const lastDeployedHash = manifest[file];
-              if (localHash !== srcHash && lastDeployedHash && localHash !== lastDeployedHash) {
-                skippedFiles.push(file);
-              } else if (!lastDeployedHash && localHash !== srcHash) {
-                skippedFiles.push(file);
-              } else {
-                await fsPromises.copyFile(src, dest);
-                newManifest[file] = srcHash;
-              }
-            } else {
-              await fsPromises.copyFile(src, dest);
-              newManifest[file] = srcHash;
-            }
-          }
-        }
-      }
+      // MCP servers are now handled via `python -m npcpy.mcp_server --team <path>`
+      // No need to deploy *_mcp_server.py scripts anymore
 
       await fsPromises.writeFile(manifestPath, JSON.stringify(newManifest, null, 2));
 
@@ -516,14 +537,7 @@ function register(ctx) {
         }
       };
       await collectBundled(npcTeamSrc);
-      if (fs.existsSync(mcpSrc)) {
-        const mcpFiles = await fsPromises.readdir(mcpSrc);
-        for (const f of mcpFiles) {
-          if (f.endsWith('_mcp_server.py') || f === 'mcp_server.py') {
-            bundledFiles[f] = hashFile(path.join(mcpSrc, f));
-          }
-        }
-      }
+      // MCP servers are now handled via npcpy.mcp_server module — no deployed scripts to diff
 
       const localFiles = {};
       const collectLocal = async (dir, relBase = '') => {
@@ -722,33 +736,7 @@ function register(ctx) {
     };
 
     const npcshDir = ctx.NPCSH_BASE || path.join(os.homedir(), '.npcsh');
-    const knownTeamDirs = [
-      { dir: path.join(npcshDir, 'npc_team'), name: 'npcsh' },
-      { dir: path.join(npcshDir, 'incognide', 'npc_team'), name: 'incognide' }
-    ];
-
-    for (const { dir, name } of knownTeamDirs) {
-      try {
-        if (fs.existsSync(dir)) {
-
-          const files = fs.readdirSync(dir);
-          for (const file of files) {
-            if (file.endsWith('_mcp_server.py') || file === 'mcp_server.py') {
-              const serverPath = path.join(dir, file);
-              addServer(serverPath, `auto:${name}`);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`Failed to scan ${dir} for MCP servers:`, e.message);
-      }
-    }
-
-    const globalMcpServer = path.join(npcshDir, 'mcp_server.py');
-    if (fs.existsSync(globalMcpServer)) {
-      addServer(globalMcpServer, 'auto:global');
-    }
-
+    // No auto-discovery — servers come from context configs and NPC configs only
     try {
       const globalRes = await fetch(`${BACKEND_URL}/api/context/global`);
       const globalJson = await globalRes.json();
