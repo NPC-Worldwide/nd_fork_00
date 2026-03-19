@@ -1296,6 +1296,24 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         };
     }, [currentPath, rootLayoutNode, activeContentPaneId]);
 
+    // Expose workspace serialization for cross-window preset saving
+    useEffect(() => {
+        (window as any).__serializeWorkspace = () => {
+            if (!currentPath || !rootLayoutNode) return null;
+            return serializeWorkspace(rootLayoutNode, currentPath, contentDataRef.current, activeContentPaneId);
+        };
+        return () => { delete (window as any).__serializeWorkspace; };
+    }, [currentPath, rootLayoutNode, activeContentPaneId]);
+
+    // Listen for cross-window workspace restore requests
+    useEffect(() => {
+        const removeListener = (window as any).api?.onRestoreWorkspace?.((data: any) => {
+            if (!data) return;
+            deserializeWorkspace(data, contentDataRef, setRootLayoutNode, setActiveContentPaneId, setIsLoadingWorkspace, generateId, getConversationStats);
+        });
+        return () => { removeListener?.(); };
+    }, []);
+
     // Resize useEffects now handled by useSidebarResize hook
 
     // Path switching hook

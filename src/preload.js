@@ -43,10 +43,17 @@ readDocxContent: (filePath) =>
 
     generateImages: (prompt, n, model, provider, attachments, baseFilename, currentPath) => ipcRenderer.invoke('generate_images', { prompt, n, model, provider, attachments, baseFilename,currentPath}),
 
-    openNewWindow: (path) => ipcRenderer.invoke('open-new-window', path),
+    openNewWindow: (path, options) => ipcRenderer.invoke('open-new-window', path, options),
     getWindowCount: () => ipcRenderer.invoke('get-window-count'),
     getAllWindowsInfo: () => ipcRenderer.invoke('get-all-windows-info'),
     closeWindowById: (windowId) => ipcRenderer.invoke('close-window-by-id', windowId),
+    requestWindowWorkspace: (windowId) => ipcRenderer.invoke('request-window-workspace', windowId),
+    restoreWindowWorkspace: (windowId, data) => ipcRenderer.invoke('restore-window-workspace', windowId, data),
+    onRestoreWorkspace: (callback) => {
+        const handler = (_, data) => callback(data);
+        ipcRenderer.on('restore-workspace', handler);
+        return () => ipcRenderer.removeListener('restore-workspace', handler);
+    },
     openInNativeExplorer: (path) => ipcRenderer.invoke('open-in-native-explorer', path),
 
     deleteConversation: (id) => ipcRenderer.invoke('deleteConversation', id),

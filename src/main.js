@@ -2113,24 +2113,35 @@ registerAll({
   NPCSH_BASE,
 });
 
-ipcMain.handle('open-new-window', async (event, initialPath) => {
+ipcMain.handle('open-new-window', async (event, initialPath, options) => {
   if (initialPath) {
     // Normalize for comparison (strip trailing slashes)
     const normPath = initialPath.replace(/\/+$/, '');
     // Check if a window already has this folder open — focus it instead
-    for (const [windowId, wsPath] of workspacePathByWindow.entries()) {
-      if (wsPath && wsPath.replace(/\/+$/, '') === normPath) {
-        const existing = BrowserWindow.getAllWindows().find(w => w.webContents?.id === windowId);
-        if (existing && !existing.isDestroyed()) {
-          if (existing.isMinimized()) existing.restore();
-          existing.focus();
-          return;
+    // (skip dedup when launching a preset — we want all windows)
+    if (!options?.skipDedup) {
+      for (const [windowId, wsPath] of workspacePathByWindow.entries()) {
+        if (wsPath && wsPath.replace(/\/+$/, '') === normPath) {
+          const existing = BrowserWindow.getAllWindows().find(w => w.webContents?.id === windowId);
+          if (existing && !existing.isDestroyed()) {
+            if (existing.isMinimized()) existing.restore();
+            existing.focus();
+            return;
+          }
         }
       }
     }
-    createWindow({ folder: initialPath });
+    const win = createWindow({ folder: initialPath });
+    if (options?.bounds && win) {
+      win.setBounds(options.bounds);
+    }
+    return win?.webContents?.id;
   } else {
-    createWindow({ blank: true });
+    const win = createWindow({ blank: true });
+    if (options?.bounds && win) {
+      win.setBounds(options.bounds);
+    }
+    return win?.webContents?.id;
   }
 });
 
@@ -2146,7 +2157,32 @@ ipcMain.handle('get-all-windows-info', async () => {
       windowId: w.webContents?.id ?? w.id,
       folderPath: workspacePathByWindow.get(w.webContents?.id) || null,
       title: w.getTitle() || 'Untitled',
+      bounds: w.getBounds(),
+      display: require('electron').screen.getDisplayMatching(w.getBounds()).id,
     }));
+});
+
+// Request a specific window to serialize its workspace and send it back
+ipcMain.handle('request-window-workspace', async (_event, windowId) => {
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (!target) return null;
+  try {
+    const result = await target.webContents.executeJavaScript('window.__serializeWorkspace?.()');
+    return result || null;
+  } catch (e) {
+    console.error('[WORKSPACE] Failed to serialize window workspace:', e);
+    return null;
+  }
+});
+
+// Tell a specific window to restore a workspace layout
+ipcMain.handle('restore-window-workspace', async (_event, windowId, workspaceData) => {
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (!target) return false;
+  target.webContents.send('restore-workspace', workspaceData);
+  return true;
 });
 
 ipcMain.handle('close-window-by-id', async (_event, windowId) => {
