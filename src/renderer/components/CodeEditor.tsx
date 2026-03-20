@@ -652,9 +652,11 @@ const CodeEditorPane = ({
         }
 
         if (currentPaneData.contentId && currentPaneData.fileChanged) {
+            currentPaneData._selfWriting = true;
             await window.api.writeFileContent(currentPaneData.contentId, currentPaneData.fileContent);
             currentPaneData.fileChanged = false;
             setRootLayoutNode(p => ({ ...p }));
+            setTimeout(() => { currentPaneData._selfWriting = false; }, 1500);
         }
     }, [nodeId, contentDataRef, setRootLayoutNode, setPromptModal, currentPath]);
 
@@ -669,11 +671,13 @@ const CodeEditorPane = ({
         if (!currentPaneData?.fileChanged || !currentPaneData?.contentId || currentPaneData?.isUntitled) return;
         const timer = setTimeout(async () => {
             try {
+                currentPaneData._selfWriting = true;
                 await (window as any).api.writeFileContent(currentPaneData.contentId, currentPaneData.fileContent);
                 currentPaneData.fileChanged = false;
                 setRootLayoutNode(p => ({ ...p }));
+                setTimeout(() => { currentPaneData._selfWriting = false; }, 1500);
             } catch (e) {
-
+                currentPaneData._selfWriting = false;
             }
         }, 3000);
         return () => clearTimeout(timer);
@@ -703,6 +707,7 @@ const CodeEditorPane = ({
         const removeListener = (window as any).api.onFileChanged(async (changedPath: string) => {
             const pd = contentDataRef.current[nodeId];
             if (!pd || pd.contentId !== changedPath) return;
+            if (pd._selfWriting) return;
             try {
                 const result = await (window as any).api.readFileContent(changedPath);
                 const diskContent = typeof result === 'string' ? result : result?.content;

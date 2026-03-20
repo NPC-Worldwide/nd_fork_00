@@ -442,6 +442,25 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
             resizeObserverRef.current = resizeObserver;
             resizeObserver.observe(terminalRef.current);
 
+            // Fallback: window resize doesn't always trigger ResizeObserver
+            // on the terminal div (e.g. single pane filling the window)
+            const handleWindowResize = () => {
+                if (resizeTimeout) clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        try { fitAddon.fit(); } catch {}
+                        if (isSessionReady.current) {
+                            window.api.resizeTerminal?.({
+                                id: terminalId,
+                                cols: term.cols,
+                                rows: term.rows
+                            });
+                        }
+                    });
+                }, 100);
+            };
+            window.addEventListener('resize', handleWindowResize);
+
             term.attachCustomKeyEventHandler((event) => {
 
                 if (event.type !== 'keydown') return true;
@@ -782,6 +801,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
             removeClosedListener();
             resizeObserverRef.current?.disconnect();
             resizeObserverRef.current = null;
+            window.removeEventListener('resize', handleWindowResize);
             pasteContainer?.removeEventListener('paste', handleImagePaste, true);
 
             // Save terminal buffer so history survives moves/de-tabs

@@ -160,13 +160,15 @@ const Sidebar = (props: any) => {
 
     const [filesSettings, setFilesSettings] = useState(() => {
         const saved = localStorage.getItem('incognide_filesSettings');
-        return saved ? JSON.parse(saved) : {
+        const defaults = {
             showHidden: false,
             allowedExtensions: '',
+            customExtensions: '',
             excludedExtensions: '.pyc,.pyo,.git,.DS_Store,__pycache__',
             excludedFolders: 'node_modules,.git,__pycache__,.venv,venv',
             maxDepth: 10
         };
+        return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
     });
 
     const [websitesSettings, setWebsitesSettings] = useState(() => {
@@ -1640,13 +1642,20 @@ const handleRefreshFilesAndFolders = () => {
     }
 };
 
+const getCustomExtensionsOptions = () => {
+    const raw = filesSettings.customExtensions?.trim();
+    if (!raw) return undefined;
+    const exts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    return exts.length ? { customExtensions: exts } : undefined;
+};
+
 const refreshDirectoryStructureOnly = async () => {
     try {
         if (!currentPath) {
             console.error('No directory path provided');
             return {};
         }
-        const structureResult = await window.api.readDirectoryStructure(currentPath);
+        const structureResult = await window.api.readDirectoryStructure(currentPath, getCustomExtensionsOptions());
         if (structureResult && !structureResult.error) {
             setFolderStructure(structureResult);
         } else {
@@ -3130,7 +3139,7 @@ const renderWebsiteList = () => {
                   console.error('No directory path provided');
                   return {};
               }
-              const structureResult = await window.api.readDirectoryStructure(dirPath);
+              const structureResult = await window.api.readDirectoryStructure(dirPath, getCustomExtensionsOptions());
               if (structureResult && !structureResult.error) {
                   setFolderStructure(structureResult);
               } else {
@@ -3874,6 +3883,16 @@ const renderFolderList = (structure) => {
                         />
                     </div>
                     <div>
+                        <label className="text-gray-400 block mb-1">Additional extensions (added to defaults)</label>
+                        <input
+                            type="text"
+                            value={filesSettings.customExtensions}
+                            onChange={(e) => setFilesSettings(s => ({ ...s, customExtensions: e.target.value }))}
+                            placeholder=".rs,.toml,.go,.java"
+                            className="w-full theme-bg-tertiary theme-border border rounded px-2 py-1 theme-text-primary placeholder:opacity-50"
+                        />
+                    </div>
+                    <div>
                         <label className="text-gray-400 block mb-1">Allowed extensions (empty=all)</label>
                         <input
                             type="text"
@@ -4144,7 +4163,7 @@ onDragStart={(e) => {
                             }}
                             onDoubleClick={() => !isInaccessible && handleOpenFolderAsWorkspace(fullPath)}
                             onContextMenu={(e) => handleSidebarItemContextMenu(e, fullPath, 'directory', isInaccessible)}
-                            className={`flex items-center gap-1.5 px-1.5 py-0.5 w-full hover:bg-gray-800 text-left rounded text-[11px] ${isInaccessible ? 'opacity-60' : ''}`}
+                            className={`flex items-center gap-1.5 px-1.5 py-0.5 w-full hover:bg-gray-800 text-left rounded text-[11px] select-none ${isInaccessible ? 'opacity-60' : ''}`}
                             title={isInaccessible ? `Permission denied: ${fullPath}` : `Drag to open as folder viewer, Click to expand, Ctrl+Click to open as workspace`}
                         >
                             {isInaccessible ? (
@@ -4218,7 +4237,7 @@ onDragStart={(e) => {
                             }
                         }}
                         onContextMenu={(e) => handleSidebarItemContextMenu(e, fullPath, 'file')}
-                        className={`flex items-center gap-1.5 px-1.5 py-0.5 w-full text-left rounded transition-all duration-200 text-[11px]
+                        className={`flex items-center gap-1.5 px-1.5 py-0.5 w-full text-left rounded transition-all duration-200 text-[11px] select-none
                             ${isActiveFile ? 'conversation-selected border-l-2 border-teal-500' :
                               isSelected ? 'conversation-selected' : 'hover:bg-gray-800'}`}
                         title={`Edit ${name}`}

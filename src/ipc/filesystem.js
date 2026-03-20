@@ -911,7 +911,7 @@ function register(ctx) {
   // Directory structure / navigation
   // ============================================
 
-  ipcMain.handle('readDirectoryStructure', async (_, dirPath) => {
+  ipcMain.handle('readDirectoryStructure', async (_, dirPath, options) => {
     const allowedExtensions = ['.py',
                                '.md',
                                '.js',
@@ -953,7 +953,18 @@ function register(ctx) {
                                '.svg',
                                '.zip',
                                '.stl',
+                               '.rs',
                               ];
+
+    // Merge in user-defined custom extensions
+    if (options?.customExtensions?.length) {
+      for (const ext of options.customExtensions) {
+        const normalized = ext.startsWith('.') ? ext.toLowerCase() : ('.' + ext.toLowerCase());
+        if (!allowedExtensions.includes(normalized)) {
+          allowedExtensions.push(normalized);
+        }
+      }
+    }
 
     const ignorePatterns = ['node_modules', '.git', '.DS_Store'];
 

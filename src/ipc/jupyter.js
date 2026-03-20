@@ -202,8 +202,8 @@ try:
             msg = client.get_iopub_msg(timeout=30)
             t, c = msg['msg_type'], msg['content']
             if t == 'stream': outputs.append({'output_type': 'stream', 'name': c.get('name','stdout'), 'text': [c.get('text','')]})
-            elif t == 'execute_result': outputs.append({'output_type': 'execute_result', 'data': c.get('data',{}), 'execution_count': c.get('execution_count')})
-            elif t == 'display_data': outputs.append({'output_type': 'display_data', 'data': c.get('data',{})})
+            elif t == 'execute_result': outputs.append({'output_type': 'execute_result', 'data': c.get('data',{}), 'metadata': c.get('metadata',{}), 'execution_count': c.get('execution_count')})
+            elif t == 'display_data': outputs.append({'output_type': 'display_data', 'data': c.get('data',{}), 'metadata': c.get('metadata',{})})
             elif t == 'error': outputs.append({'output_type': 'error', 'ename': c.get('ename','Error'), 'evalue': c.get('evalue',''), 'traceback': c.get('traceback',[])})
             elif t == 'status' and c.get('execution_state') == 'idle': break
         except: break

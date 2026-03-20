@@ -142,6 +142,8 @@ jobs:
         run: |
           npx electron-rebuild --force --module-dir . --which-module sqlite3
           npx electron-rebuild --force --module-dir . --which-module node-pty || true
+        env:
+          npm_config_build_from_source: true
 
       - name: Rebuild native modules for Electron (Windows)
         if: runner.os == 'Windows'

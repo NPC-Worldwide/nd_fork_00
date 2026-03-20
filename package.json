@@ -1,6 +1,6 @@
 {
   "name": "incognide",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Explore the unknown, build the future, own your data.",
   "author": "Chris Agostino <info@npcworldwi.de>",
   "main": "src/main.js",
@@ -25,7 +25,7 @@
     "electron:rebuild": "npx electron-rebuild --module-dir . --which-module sqlite3 --force",
     "electron:build": "electron-builder",
     "pack": "npm run build && npm run electron:build",
-    "postinstall": "npm run rebuild",
+    "postinstall": "npm run rebuild || echo 'electron-rebuild failed (non-fatal) - native modules may need manual rebuild'",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

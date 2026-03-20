@@ -1129,11 +1129,13 @@ const LatexViewer = ({
     contentRef.current = content;
     const hasChangesRef = useRef(hasChanges);
     hasChangesRef.current = hasChanges;
+    const selfWritingRef = useRef(false);
     useEffect(() => {
         if (!filePath) return;
         (window as any).api.watchFile(filePath);
         const removeListener = (window as any).api.onFileChanged(async (changedPath: string) => {
             if (changedPath !== filePath) return;
+            if (selfWritingRef.current) return;
             try {
                 const result = await (window as any).api.readFileContent(changedPath);
                 const diskContent = typeof result === 'string' ? result : result?.content;
@@ -1308,11 +1310,14 @@ const LatexViewer = ({
         setIsSaving(true);
         setError(null);
         try {
+            selfWritingRef.current = true;
             await (window as any).api.writeFileContent(filePath, content);
             setHasChanges(false);
             setShowSavedFlash(true);
             setTimeout(() => setShowSavedFlash(false), 1500);
+            setTimeout(() => { selfWritingRef.current = false; }, 1500);
         } catch (e: any) {
+            selfWritingRef.current = false;
             setError(e.message || String(e));
         } finally {
             setIsSaving(false);
@@ -1323,10 +1328,12 @@ const LatexViewer = ({
         if (!hasChanges || !filePath || isSaving) return;
         const timer = setTimeout(async () => {
             try {
+                selfWritingRef.current = true;
                 await (window as any).api.writeFileContent(filePath, content);
                 setHasChanges(false);
+                setTimeout(() => { selfWritingRef.current = false; }, 1500);
             } catch (e) {
-
+                selfWritingRef.current = false;
             }
         }, 3000);
         return () => clearTimeout(timer);
@@ -1348,9 +1355,12 @@ const LatexViewer = ({
     const compile = useCallback(async (openInSplit = true) => {
         if (hasChanges) {
             try {
+                selfWritingRef.current = true;
                 await (window as any).api.writeFileContent(filePath, content);
                 setHasChanges(false);
+                setTimeout(() => { selfWritingRef.current = false; }, 1500);
             } catch (e: any) {
+                selfWritingRef.current = false;
                 setError('Failed to save: ' + (e.message || String(e)));
                 return;
             }

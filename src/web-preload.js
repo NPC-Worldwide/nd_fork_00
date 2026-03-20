@@ -292,7 +292,7 @@
     // ==================== Directory ====================
     getDefaultConfig: () => invoke('getDefaultConfig'),
     getProjectCtx: (currentPath) => invoke('getProjectCtx', currentPath),
-    readDirectoryStructure: (dirPath) => invoke('readDirectoryStructure', dirPath),
+    readDirectoryStructure: (dirPath, options) => invoke('readDirectoryStructure', dirPath, options),
     goUpDirectory: (currentPath) => invoke('goUpDirectory', currentPath),
     readDirectory: (dirPath) => invoke('readDirectory', dirPath),
     ensureDir: (dirPath) => invoke('ensureDirectory', dirPath),
