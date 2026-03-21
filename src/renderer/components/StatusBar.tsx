@@ -3,7 +3,7 @@ import {
     MessageSquare, Terminal, Globe, FileText, File as FileIcon,
     BrainCircuit, Clock, Bot, Zap, Users, Database, ChevronRight, ChevronDown,
     GitBranch, Image, BarChart3, AlertCircle, RefreshCw, Check, Columns, Layers,
-    Activity, Server
+    Activity, Server, Wifi
 } from 'lucide-react';
 import MemoryIcon from './MemoryIcon';
 import { useAiEnabled } from './AiFeatureContext';
