@@ -13,7 +13,7 @@ import {
     Loader2, ExternalLink, Link, Unlink, Filter, SortAsc, SortDesc, Table, Grid,
     List, Maximize2, Minimize2, Move, RotateCcw, ZoomIn, ZoomOut, Layers, Layout,
     Pause, Server, Mail, Cpu, Wifi, WifiOff, Power, PowerOff, Hash, AtSign, FlaskConical,
-    BrainCircuit, Music, Square
+    BrainCircuit, Music, Square, Monitor
 } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
@@ -6147,7 +6147,7 @@ return (
                 className="flex-1 flex items-center justify-center h-full hover:bg-teal-500/20 transition-all border-r border-gray-700"
                 title="Window Manager"
             >
-                <Layers size={16} className="text-gray-600 dark:text-gray-400" />
+                <Monitor size={16} className="text-gray-600 dark:text-gray-400" />
             </button>
             <button
                 onClick={() => setBottomGridCollapsed(!bottomGridCollapsed)}

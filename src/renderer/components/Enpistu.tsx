@@ -963,14 +963,22 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         }
         if (api.api?.onMenuOpenFile) {
             cleanups.push(api.api.onMenuOpenFile(async () => {
-                const result = await api.api.open_directory_picker?.();
-                if (result) {
-                    // Open file in editor
-                    const stats = await api.api.readDirectory?.(result);
-                    if (stats && !stats.error) {
-                        // It's a directory, switch to it
-                        setCurrentPath(result);
+                try {
+                    const fileData = await api.api.showOpenDialog?.({
+                        properties: ['openFile'],
+                        filters: [
+                            { name: 'All Files', extensions: ['*'] },
+                            { name: 'Code', extensions: ['js', 'jsx', 'ts', 'tsx', 'py', 'rs', 'go', 'json', 'html', 'css', 'md'] },
+                            { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt', 'tex', 'pptx'] },
+                            { name: 'Data', extensions: ['csv', 'xlsx', 'xls', 'ipynb'] },
+                            { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'] },
+                        ],
+                    });
+                    if (fileData && fileData.length > 0 && handleFileClickRef.current) {
+                        handleFileClickRef.current(fileData[0].path);
                     }
+                } catch (error) {
+                    console.error('Error opening file dialog:', error);
                 }
             }));
         }

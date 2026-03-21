@@ -2195,6 +2195,72 @@ ipcMain.handle('close-window-by-id', async (_event, windowId) => {
   return false;
 });
 
+ipcMain.handle('focus-window-by-id', async (_event, windowId) => {
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (target) {
+    if (target.isMinimized()) target.restore();
+    target.focus();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('minimize-window-by-id', async (_event, windowId) => {
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (target) {
+    target.minimize();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('maximize-window-by-id', async (_event, windowId) => {
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (target) {
+    if (target.isMaximized()) target.unmaximize();
+    else target.maximize();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('get-displays', async () => {
+  const { screen } = require('electron');
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  return displays.map(d => ({
+    id: d.id,
+    label: d.label || `Display ${d.id}`,
+    bounds: d.bounds,
+    workArea: d.workArea,
+    scaleFactor: d.scaleFactor,
+    isPrimary: d.id === primary.id,
+    size: d.size,
+  }));
+});
+
+ipcMain.handle('move-window-to-display', async (_event, windowId, displayId) => {
+  const { screen } = require('electron');
+  const allWindows = BrowserWindow.getAllWindows();
+  const target = allWindows.find(w => !w.isDestroyed() && (w.webContents?.id === windowId || w.id === windowId));
+  if (!target) return false;
+  const displays = screen.getAllDisplays();
+  const targetDisplay = displays.find(d => d.id === displayId);
+  if (!targetDisplay) return false;
+  const currentBounds = target.getBounds();
+  target.setBounds({
+    x: targetDisplay.workArea.x + 50,
+    y: targetDisplay.workArea.y + 50,
+    width: Math.min(currentBounds.width, targetDisplay.workArea.width - 100),
+    height: Math.min(currentBounds.height, targetDisplay.workArea.height - 100),
+  });
+  target.focus();
+  return true;
+});
+
 ipcMain.handle('backend:health', async () => {
   try {
     const controller = new AbortController();

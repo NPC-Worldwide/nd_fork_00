@@ -68,7 +68,7 @@ interface MarketplaceItem {
 
 const MCP_MARKETPLACE: MarketplaceItem[] = [
 
-    { id: 'sqlite', name: 'SQLite', description: 'Query and manage SQLite databases', category: 'data', install: 'npx -y @modelcontextprotocol/server-sqlite', transport: 'stdio', repo: 'modelcontextprotocol/servers' },
+    { id: 'sqlite', name: 'SQLite', description: 'Query and manage SQLite databases', category: 'data', install: 'npx -y mcp-server-sqlite', transport: 'stdio', repo: 'nicobailey/mcp-server-sqlite' },
     { id: 'postgres', name: 'PostgreSQL', description: 'Query PostgreSQL databases with read-only access', category: 'data', install: 'npx -y @modelcontextprotocol/server-postgres', transport: 'stdio', envVars: [{ key: 'POSTGRES_CONNECTION_STRING', label: 'Connection String', placeholder: 'postgresql://user:pass@localhost/db' }], repo: 'modelcontextprotocol/servers' },
     { id: 'redis', name: 'Redis', description: 'Interact with Redis key-value stores', category: 'data', install: 'uvx mcp-server-redis', transport: 'stdio', envVars: [{ key: 'REDIS_URL', label: 'Redis URL', placeholder: 'redis://localhost:6379' }] },
 
@@ -124,9 +124,10 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
     const [showAddServer, setShowAddServer] = useState(false);
     const [newServerPath, setNewServerPath] = useState('');
     const [addScope, setAddScope] = useState<'global' | 'project'>('project');
-    const [addMode, setAddMode] = useState<'local' | 'remote' | 'marketplace'>('local');
+    const [addMode, setAddMode] = useState<'local' | 'remote' | 'team' | 'marketplace'>('local');
     const [remoteUrl, setRemoteUrl] = useState('');
     const [marketplaceSearch, setMarketplaceSearch] = useState('');
+    const [discoveredTeams, setDiscoveredTeams] = useState<any[]>([]);
 
     const [configuringItem, setConfiguringItem] = useState<MarketplaceItem | null>(null);
     const [envVarValues, setEnvVarValues] = useState<Record<string, string>>({});
@@ -159,8 +160,23 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
         }
     }, [currentPath, selectedServer?.serverPath]);
 
+    const loadTeams = useCallback(async () => {
+        try {
+            const response = await (window as any).api.listMcpTools?.({ currentPath });
+            if (response?.team_servers) {
+                setDiscoveredTeams(response.team_servers.map((s: any) => ({
+                    path: s.path || s.url || '',
+                    label: s.label || s.path || '',
+                    command: s.path || '',
+                    scope: s.path?.includes('.npcsh') ? 'global' : 'project',
+                })));
+            }
+        } catch {}
+    }, [currentPath]);
+
     useEffect(() => {
         loadServers();
+        loadTeams();
     }, [currentPath]);
 
     useEffect(() => {
@@ -263,7 +279,7 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
                 : serverValue;
 
             if (addScope === 'global') {
-                const current = await (window as any).api.getGlobalContext();
+                const current = await (window as any).api.getGlobalContext('npcsh');
                 const ctx = current?.context || {};
                 const servers = ctx.mcp_servers || [];
 
@@ -275,7 +291,7 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
                 } else {
                     servers.push(entry);
                 }
-                await (window as any).api.saveGlobalContext({ ...ctx, mcp_servers: servers });
+                await (window as any).api.saveGlobalContext({ ...ctx, mcp_servers: servers }, 'npcsh');
             } else {
                 const current = await (window as any).api.getProjectContext(currentPath);
                 const ctx = current?.context || {};
@@ -327,6 +343,39 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
         handleAddServer(configuringItem.install, envVars, configuringItem.id, configuringItem.name);
     }, [configuringItem, envVarValues, handleAddServer]);
 
+    const handleCloneTeam = useCallback(async (repoUrl: string) => {
+        try {
+            setError(null);
+            // Normalize URL
+            let url = repoUrl.trim();
+            if (!url.startsWith('http') && !url.startsWith('git@')) {
+                url = `https://github.com/${url}`;
+            }
+            if (!url.endsWith('.git')) url += '.git';
+            const repoName = url.split('/').pop()?.replace('.git', '') || 'team';
+            const destPath = `~/.npcsh/teams/${repoName}`;
+
+            // Clone via terminal-like exec
+            await (window as any).api.executeCommand?.(`git clone ${url} ${destPath}`);
+
+            // Check if npc_team subfolder exists, otherwise use root
+            let teamPath = destPath;
+            try {
+                const dirContents = await (window as any).api.readDirectory?.(destPath);
+                if (Array.isArray(dirContents)) {
+                    const hasNpcTeam = dirContents.some((f: any) => f.name === 'npc_team' && f.isDirectory);
+                    if (hasNpcTeam) teamPath = `${destPath}/npc_team`;
+                }
+            } catch {}
+
+            await handleAddServer(`python -m npcpy.mcp_server --team ${teamPath}`);
+            setRemoteUrl('');
+            await loadTeams();
+        } catch (err: any) {
+            setError(`Clone failed: ${err.message}`);
+        }
+    }, [handleAddServer, loadTeams]);
+
     const handleRemoveServer = useCallback(async (server: McpServer) => {
         try {
             setError(null);
@@ -337,12 +386,12 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
 
             const isGlobal = server.origin?.includes('global') || server.origin?.startsWith('auto:');
             if (isGlobal) {
-                const current = await (window as any).api.getGlobalContext();
+                const current = await (window as any).api.getGlobalContext('npcsh');
                 const ctx = current?.context || {};
                 ctx.mcp_servers = (ctx.mcp_servers || []).filter(
                     (s: any) => (typeof s === 'string' ? s : s.value) !== server.serverPath
                 );
-                await (window as any).api.saveGlobalContext(ctx);
+                await (window as any).api.saveGlobalContext(ctx, 'npcsh');
             } else {
                 const current = await (window as any).api.getProjectContext(currentPath);
                 const ctx = current?.context || {};
@@ -392,12 +441,26 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
 
     const getServerDisplayName = (server: McpServer): string => {
         if (server.name) return server.name;
+        // Handle npx/uvx commands
+        if (server.serverPath.startsWith('npx ') || server.serverPath.startsWith('uvx ')) {
+            const parts = server.serverPath.split(/\s+/);
+            const pkg = parts[parts.length - 1];
+            return pkg.replace(/@.*\//, '').replace(/^server-/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
         const fileName = getFileName(server.serverPath) || server.serverPath;
         return fileName.replace(/_mcp_server\.py$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     };
 
     const getOriginBadge = (server: McpServer) => {
         if (!server.origin) return null;
+        if (server.origin.startsWith('auto:team:') || server.serverPath.includes('--team')) {
+            const displayName = getServerDisplayName(server).replace(/ NPC Team$/, '').replace(/ Team$/, '');
+            return (
+                <span className="text-[10px] bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded-full">
+                    Team: {displayName}
+                </span>
+            );
+        }
         if (server.origin.startsWith('auto:')) {
             return (
                 <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
@@ -467,7 +530,8 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
                     <div className="flex items-center gap-0 border-b theme-border">
                         {([
                             { key: 'local' as const, label: 'Local Script', icon: <FileText size={12} /> },
-                            { key: 'remote' as const, label: 'Remote URL', icon: <Globe size={12} /> },
+                            { key: 'remote' as const, label: 'Remote / npx / uvx', icon: <Globe size={12} /> },
+                            { key: 'team' as const, label: 'NPC Teams', icon: <Package size={12} /> },
                             { key: 'marketplace' as const, label: 'Marketplace', icon: <Zap size={12} /> },
                         ]).map(tab => (
                             <button
@@ -525,7 +589,8 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
                                                 properties: ['openFile'],
                                                 filters: [{ name: 'Scripts', extensions: ['py', 'js', 'ts'] }]
                                             });
-                                            if (result?.filePaths?.[0]) setNewServerPath(result.filePaths[0]);
+                                            if (result?.[0]?.path) setNewServerPath(result[0].path);
+                                            else if (result?.filePaths?.[0]) setNewServerPath(result.filePaths[0]);
                                         }}
                                         className="theme-button px-2 py-1.5 rounded text-xs"
                                         title="Browse for file"
@@ -575,6 +640,105 @@ const McpManager: React.FC<McpManagerProps> = ({ currentPath, embedded = true })
                                 >
                                     Add Remote Server
                                 </button>
+                            </div>
+                        )}
+
+                        {addMode === 'team' && (
+                            <div className="space-y-2">
+                                <div className="text-[10px] theme-text-muted mb-2">
+                                    Detected NPC team folders that can be started as MCP servers via <code className="text-blue-300">python -m npcpy.mcp_server --team &lt;path&gt;</code>
+                                </div>
+                                {discoveredTeams.length === 0 ? (
+                                    <div className="text-xs theme-text-muted italic py-2">No NPC team folders found</div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {discoveredTeams.map(team => {
+                                            const isAlreadyAdded = servers.some(s => s.serverPath === team.command);
+                                            const isRunning = servers.some(s => s.serverPath === team.command && s.status === 'running');
+                                            return (
+                                                <div key={team.path} className="flex items-center gap-2 px-3 py-2 rounded theme-bg-secondary border theme-border">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Package size={12} className="text-purple-400 shrink-0" />
+                                                            <span className="text-xs font-medium theme-text-primary">{team.label}</span>
+                                                            <span className={`text-[9px] px-1 py-0.5 rounded ${team.scope === 'global' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
+                                                                {team.scope}
+                                                            </span>
+                                                            {isRunning && <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/20 text-green-400">running</span>}
+                                                        </div>
+                                                        <div className="text-[10px] theme-text-muted truncate font-mono mt-0.5">{team.path}</div>
+                                                        <div className="text-[9px] theme-text-muted mt-0.5">
+                                                            {team.files?.filter((f: string) => f.endsWith('.npc')).length || 0} NPCs, {team.files?.filter((f: string) => f.endsWith('.ctx')).length || 0} ctx
+                                                        </div>
+                                                    </div>
+                                                    {isAlreadyAdded ? (
+                                                        <span className="text-[10px] text-green-400 shrink-0">Added</span>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleAddServer(team.command)}
+                                                            className="theme-button-primary px-2 py-1 rounded text-[10px] shrink-0 flex items-center gap-1"
+                                                        >
+                                                            <Plus size={10} /> Add
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                <div className="border-t theme-border pt-2 mt-2">
+                                    <div className="text-[10px] theme-text-muted mb-1">Add a custom team path:</div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newServerPath}
+                                            onChange={(e) => setNewServerPath(e.target.value)}
+                                            placeholder="/path/to/npc_team"
+                                            className="flex-1 theme-input text-xs font-mono px-2 py-1.5 rounded"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && newServerPath.trim()) {
+                                                    handleAddServer(`python -m npcpy.mcp_server --team ${newServerPath.trim()}`);
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (newServerPath.trim()) handleAddServer(`python -m npcpy.mcp_server --team ${newServerPath.trim()}`);
+                                            }}
+                                            disabled={!newServerPath.trim()}
+                                            className="theme-button-primary px-2 py-1.5 rounded text-xs disabled:opacity-50"
+                                        >
+                                            Add Team
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="border-t theme-border pt-2 mt-2">
+                                    <div className="text-[10px] theme-text-muted mb-1">Clone NPC team from GitHub:</div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={remoteUrl}
+                                            onChange={(e) => setRemoteUrl(e.target.value)}
+                                            placeholder="https://github.com/user/repo or user/repo"
+                                            className="flex-1 theme-input text-xs font-mono px-2 py-1.5 rounded"
+                                            onKeyDown={async (e) => {
+                                                if (e.key === 'Enter' && remoteUrl.trim()) {
+                                                    await handleCloneTeam(remoteUrl.trim());
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => remoteUrl.trim() && handleCloneTeam(remoteUrl.trim())}
+                                            disabled={!remoteUrl.trim()}
+                                            className="theme-button-primary px-2 py-1.5 rounded text-xs disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            <ExternalLink size={10} /> Clone
+                                        </button>
+                                    </div>
+                                    <div className="text-[9px] theme-text-muted mt-1">
+                                        Clones the repo into <code>~/.npcsh/teams/</code> and registers it as an MCP server
+                                    </div>
+                                </div>
                             </div>
                         )}
 
