@@ -9,6 +9,28 @@ import {
 import MemoryIcon from './MemoryIcon';
 import ContextFilesPanel from './ContextFilesPanel';
 
+const getMcpServerDisplayName = (serverPath: string): string => {
+    // Handle team-based: "python -m npcpy.mcp_server --team /path/to/npc_team"
+    const teamMatch = serverPath.match(/--team\s+(.+)$/);
+    if (teamMatch) {
+        const teamPath = teamMatch[1].trim().replace(/\/$/, '');
+        const parts = teamPath.split('/');
+        const last = parts[parts.length - 1];
+        if (last === 'npc_team' || last.endsWith('_team')) {
+            const parent = parts[parts.length - 2] || last;
+            return `${parent} ${last}`.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+        return last.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    // Handle npx/uvx commands
+    if (serverPath.startsWith('npx ') || serverPath.startsWith('uvx ')) {
+        const parts = serverPath.split(/\s+/);
+        const pkg = parts[parts.length - 1];
+        return pkg.replace(/@.*\//, '').replace(/^server-/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    return getFileName(serverPath)?.replace(/\.py$/, '') || serverPath;
+};
+
 const getParamColor = (value: number, min: number, max: number): string => {
 
     const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
@@ -203,7 +225,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
         if (res.error || !(res.tools?.length)) {
             // Server may not be running — attempt to start it
             try {
-                await api.mcpStartServer?.({ serverPath, currentPath });
+                await api.startMcpServer?.({ serverPath, currentPath });
                 // Brief wait for server startup
                 await new Promise(r => setTimeout(r, 1500));
                 res = await api.listMcpTools({ serverPath, currentPath });
@@ -300,7 +322,27 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                 if (res?.servers?.length) {
                     setLocalMcpServers(res.servers);
 
-                    if (!mcpServerPath && !currentNPC && enabledServers.size === 0) {
+                    // Auto-enable running servers and load their tools
+                    const running = res.servers.filter((s: any) => s.status === 'running');
+                    if (running.length > 0 && enabledServers.size === 0) {
+                        for (const srv of running) {
+                            const toolRes = await (window as any).api.listMcpTools({ serverPath: srv.serverPath, currentPath });
+                            if (toolRes?.tools?.length) {
+                                const serverLabel = getMcpServerDisplayName(srv.serverPath);
+                                const newTools = toolRes.tools.map((t: any) => ({
+                                    ...t,
+                                    _source: t._source || `mcp:${serverLabel}`,
+                                    _serverPath: srv.serverPath,
+                                }));
+                                setEnabledServers(prev => new Set(prev).add(srv.serverPath));
+                                setAvailableMcpTools(prev => {
+                                    const existingNames = new Set(prev.map((t: any) => t.function?.name));
+                                    return [...prev, ...newTools.filter((t: any) => !existingNames.has(t.function?.name))];
+                                });
+                                setSelectedMcpTools(prev => [...new Set([...prev, ...newTools.map((t: any) => t.function?.name).filter(Boolean)])]);
+                            }
+                        }
+                    } else if (enabledServers.size === 0) {
                         const firstPath = res.servers[0].serverPath;
                         setMcpServerPath(firstPath);
                         loadToolsForServer(firstPath);
@@ -1409,25 +1451,7 @@ const ChatInput: React.FC<ChatInputProps> = (props) => {
                                                             srv.status === 'running' ? 'bg-green-400' :
                                                             srv.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'
                                                         }`} />
-                                                        <span className="truncate theme-text-primary">{getFileName(srv.serverPath)?.replace(/\.py$/, '') || srv.serverPath}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {teamServers.map((srv: any, idx: number) => {
-                                                const serverPath = srv.path || srv.url || '';
-                                                const label = srv.label || serverPath || `Team Server ${idx + 1}`;
-                                                const isOn = enabledServers.has(serverPath);
-                                                if (!serverPath) return null;
-                                                return (
-                                                    <div
-                                                        key={`team-${idx}`}
-                                                        className={`px-2 py-1.5 text-xs cursor-pointer flex items-center gap-2 theme-hover ${isOn ? 'bg-blue-500/10' : ''}`}
-                                                        onClick={() => toggleServer(serverPath)}
-                                                    >
-                                                        <input type="checkbox" checked={isOn} readOnly className="pointer-events-none" />
-                                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-gray-400" />
-                                                        <span className="truncate theme-text-primary">{getFileName(label)?.replace(/\.py$/, '') || label}</span>
-                                                        <span className="text-[9px] theme-text-muted ml-auto">team</span>
+                                                        <span className="truncate theme-text-primary">{srv.name || getMcpServerDisplayName(srv.serverPath)}</span>
                                                     </div>
                                                 );
                                             })}

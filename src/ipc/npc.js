@@ -67,12 +67,14 @@ function register(ctx) {
                 skippedFiles.push(relPath);
               } else {
                 await fsPromises.copyFile(src, dest);
+                await fsPromises.chmod(dest, 0o644);
                 newManifest[relPath] = srcHash;
               }
             }
           } else {
 
             await fsPromises.copyFile(src, dest);
+            await fsPromises.chmod(dest, 0o644);
             newManifest[relPath] = srcHash;
           }
         }
@@ -735,8 +737,7 @@ function register(ctx) {
       }
     };
 
-    const npcshDir = ctx.NPCSH_BASE || path.join(os.homedir(), '.npcsh');
-    // No auto-discovery — servers come from context configs and NPC configs only
+    // Load servers from backend context endpoints
     try {
       const globalRes = await fetch(`${BACKEND_URL}/api/context/global`);
       const globalJson = await globalRes.json();
@@ -754,6 +755,28 @@ function register(ctx) {
         console.warn('Failed to load project ctx for MCP servers', e.message);
       }
     }
+
+    // Load team servers from backend npc_tools endpoint (includes auto-discovered teams)
+    try {
+      const params = new URLSearchParams();
+      if (currentPath) params.append('currentPath', currentPath);
+      const teamRes = await fetch(`${BACKEND_URL}/api/npc_tools?${params.toString()}`);
+      const teamJson = await teamRes.json();
+      for (const srv of (teamJson.team_servers || [])) {
+        const serverPath = srv.path || srv.url || '';
+        if (serverPath && !servers.has(serverPath)) {
+          const ctxLabel = srv.label || serverPath;
+          servers.set(serverPath, {
+            serverPath,
+            origin: 'auto:team',
+            name: ctxLabel,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load team servers from backend', e.message);
+    }
+
     return Array.from(servers.values());
   }
 

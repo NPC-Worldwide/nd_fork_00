@@ -168,6 +168,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
     const xtermInstance = useRef(null);
     const fitAddonRef = useRef(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
+    const handleWindowResizeRef = useRef<(() => void) | null>(null);
     const isSessionReady = useRef(false);
     const terminalOutputBuffer = useRef<string[]>([]);
     const initialPathRef = useRef(currentPath);
@@ -459,6 +460,7 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
                     });
                 }, 100);
             };
+            handleWindowResizeRef.current = handleWindowResize;
             window.addEventListener('resize', handleWindowResize);
 
             term.attachCustomKeyEventHandler((event) => {
@@ -801,7 +803,10 @@ const TerminalView = ({ nodeId, contentDataRef, currentPath, activeContentPaneId
             removeClosedListener();
             resizeObserverRef.current?.disconnect();
             resizeObserverRef.current = null;
-            window.removeEventListener('resize', handleWindowResize);
+            if (handleWindowResizeRef.current) {
+                window.removeEventListener('resize', handleWindowResizeRef.current);
+                handleWindowResizeRef.current = null;
+            }
             pasteContainer?.removeEventListener('paste', handleImagePaste, true);
 
             // Save terminal buffer so history survives moves/de-tabs

@@ -6,6 +6,7 @@ import {
     Activity, Server
 } from 'lucide-react';
 import MemoryIcon from './MemoryIcon';
+import npcPythonLogo from '../../assets/npc-python.png';
 import { useAiEnabled } from './AiFeatureContext';
 
 interface PaneItem {
@@ -211,21 +212,21 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
             <div className="relative group/backend">
                 <div
+                    onClick={() => window.dispatchEvent(new Event('sse-reconnect'))}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setShowBackendMenu(true); }}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-                        backendStatus === 'ok' ? 'text-gray-400' : 'text-red-400'
+                    className={`flex items-center gap-1 px-1.5 py-1 rounded transition-colors cursor-pointer hover:bg-white/10 ${
+                        backendStatus === 'ok' ? '' : 'opacity-60'
                     }`}
-                    title={statusLabel + ' — right-click for options'}
+                    title={statusLabel + ' — click to reconnect SSE — right-click for options'}
                 >
-                    <span className={`w-2 h-2 rounded-full ${statusColor} flex-shrink-0`} />
-                    {restarting ? (
-                        <RefreshCw size={12} className="animate-spin text-yellow-400" />
-                    ) : backendStatus !== 'ok' && backendStatus !== 'unknown' ? (
-                        <Activity size={12} />
-                    ) : null}
-                    <span className="text-[10px]">
-                        {restarting ? 'Restarting...' : backendStatus === 'ok' ? 'Python' : backendStatus === 'unknown' ? 'Python...' : 'Python \u2717'}
-                    </span>
+                    <img
+                        src={npcPythonLogo}
+                        alt="npcpy"
+                        className={`w-4 h-4 rounded-sm transition-all ${
+                            backendStatus === 'ok' ? '' : 'grayscale opacity-50'
+                        } ${restarting ? 'animate-pulse' : ''}`}
+                    />
+                    {restarting && <RefreshCw size={10} className="animate-spin text-yellow-400" />}
                 </div>
                 {showBackendMenu && (
                     <>

@@ -963,14 +963,22 @@ const ChatInterface = ({ onRerunSetup }: { onRerunSetup?: () => void }) => {
         }
         if (api.api?.onMenuOpenFile) {
             cleanups.push(api.api.onMenuOpenFile(async () => {
-                const result = await api.api.open_directory_picker?.();
-                if (result) {
-                    // Open file in editor
-                    const stats = await api.api.readDirectory?.(result);
-                    if (stats && !stats.error) {
-                        // It's a directory, switch to it
-                        setCurrentPath(result);
+                try {
+                    const fileData = await api.api.showOpenDialog?.({
+                        properties: ['openFile'],
+                        filters: [
+                            { name: 'All Files', extensions: ['*'] },
+                            { name: 'Code', extensions: ['js', 'jsx', 'ts', 'tsx', 'py', 'rs', 'go', 'json', 'html', 'css', 'md'] },
+                            { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt', 'tex', 'pptx'] },
+                            { name: 'Data', extensions: ['csv', 'xlsx', 'xls', 'ipynb'] },
+                            { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'] },
+                        ],
+                    });
+                    if (fileData && fileData.length > 0 && handleFileClickRef.current) {
+                        handleFileClickRef.current(fileData[0].path);
                     }
+                } catch (error) {
+                    console.error('Error opening file dialog:', error);
                 }
             }));
         }
@@ -1866,6 +1874,18 @@ useEffect(() => {
         }
     };
 
+    let lastMessageTime = Date.now();
+    let heartbeatInterval: any = null;
+
+    const forceReconnect = () => {
+        console.log('[SSE] Force reconnect triggered');
+        eventSource?.close();
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        connect();
+    };
+
+    window.addEventListener('sse-reconnect', forceReconnect);
+
     const connect = () => {
         const params = new URLSearchParams();
         if (windowId) params.set('windowId', windowId);
@@ -1873,6 +1893,7 @@ useEffect(() => {
         const qs = params.toString();
         const url = `${BACKEND_URL}/api/studio/actions_stream${qs ? '?' + qs : ''}`;
         eventSource = new EventSource(url);
+        lastMessageTime = Date.now();
 
         // Register window metadata
         if (windowId) {
@@ -1888,28 +1909,44 @@ useEffect(() => {
         }
 
         eventSource.onmessage = (event) => {
+            lastMessageTime = Date.now();
             try {
                 const data = JSON.parse(event.data);
                 if (data.id && data.action && data.status === 'pending') {
                     executeAction(data.id, data);
                 }
             } catch (err) {
-                // Ignore parse errors
+                // Ignore parse errors (keepalives)
             }
+        };
+
+        eventSource.onopen = () => {
+            lastMessageTime = Date.now();
         };
 
         eventSource.onerror = () => {
             eventSource?.close();
-            // Reconnect after 2 seconds
             reconnectTimeout = setTimeout(connect, 2000);
         };
     };
 
     connect();
 
+    // Heartbeat: if no data (including keepalives) for 60s, force reconnect
+    heartbeatInterval = setInterval(() => {
+        if (Date.now() - lastMessageTime > 60000) {
+            console.log('[SSE] No heartbeat in 60s, reconnecting...');
+            eventSource?.close();
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            connect();
+        }
+    }, 15000);
+
     return () => {
         eventSource?.close();
         if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        window.removeEventListener('sse-reconnect', forceReconnect);
     };
 }, [windowId]);
 
