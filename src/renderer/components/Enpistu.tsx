@@ -1877,6 +1877,15 @@ useEffect(() => {
     let lastMessageTime = Date.now();
     let heartbeatInterval: any = null;
 
+    const forceReconnect = () => {
+        console.log('[SSE] Force reconnect triggered');
+        eventSource?.close();
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        connect();
+    };
+
+    window.addEventListener('sse-reconnect', forceReconnect);
+
     const connect = () => {
         const params = new URLSearchParams();
         if (windowId) params.set('windowId', windowId);
@@ -1937,6 +1946,7 @@ useEffect(() => {
         eventSource?.close();
         if (reconnectTimeout) clearTimeout(reconnectTimeout);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
+        window.removeEventListener('sse-reconnect', forceReconnect);
     };
 }, [windowId]);
 

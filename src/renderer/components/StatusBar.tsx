@@ -379,6 +379,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
                 </button>
             )}
 
+            <button
+                onClick={() => window.dispatchEvent(new Event('sse-reconnect'))}
+                className={`${btnClass} text-gray-400 dark:text-gray-500 hover:text-green-400`}
+                title="Reconnect MCP/Studio SSE"
+            >
+                <Wifi size={16} />
+            </button>
+
             <div className="relative group/update">
                 <button
                     onClick={handleCheckUpdates}
